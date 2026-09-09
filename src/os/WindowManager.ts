@@ -1,4 +1,3 @@
-import { SCREEN_PX } from '../world/layout';
 
 export interface AppDefinition {
   id: string;
@@ -35,11 +34,30 @@ export class WindowManager {
   private cascade = 0;
 
   private onChange: () => void = () => {};
+  /** Narrow screens run one full-bleed window at a time. */
+  private compact = false;
 
   constructor(
     private layer: HTMLElement,
     private screenRoot: HTMLElement,
+    private onSound: () => void = () => {},
   ) {}
+
+  setCompact(compact: boolean) {
+    this.compact = compact;
+  }
+
+  /**
+   * The screen's own coordinate box. Inside the CRT that is the fixed
+   * 1280x960 surface; in the phone overlay it is the live viewport, so
+   * windows lay out at true 1:1 pixels with no scaling to undo.
+   */
+  private get box() {
+    return {
+      width: this.screenRoot.offsetWidth || 1280,
+      height: this.screenRoot.offsetHeight || 960,
+    };
+  }
 
   setOnChange(listener: () => void) {
     this.onChange = listener;
@@ -86,14 +104,24 @@ export class WindowManager {
       return;
     }
 
-    const width = Math.min(app.width, SCREEN_PX.width - 80);
-    const height = Math.min(app.height, SCREEN_PX.height - TASKBAR_HEIGHT - 80);
+    // On a phone a floating window is unusable: fill the screen instead.
+    const box = this.box;
+    const width = this.compact
+      ? box.width - 24
+      : Math.min(app.width, box.width - 80);
+    const height = this.compact
+      ? box.height - TASKBAR_HEIGHT - 24
+      : Math.min(app.height, box.height - TASKBAR_HEIGHT - 80);
 
     // Cascade down and right, wrapping before windows walk off the screen.
-    const offset = (this.cascade % 5) * CASCADE_STEP;
+    const offset = this.compact ? 0 : (this.cascade % 5) * CASCADE_STEP;
     this.cascade += 1;
-    const x = Math.round((SCREEN_PX.width - width) / 2 - 60 + offset);
-    const y = Math.round((SCREEN_PX.height - TASKBAR_HEIGHT - height) / 2 - 40 + offset);
+    const x = this.compact
+      ? 12
+      : Math.round((box.width - width) / 2 - 60 + offset);
+    const y = this.compact
+      ? 12
+      : Math.round((box.height - TASKBAR_HEIGHT - height) / 2 - 40 + offset);
 
     const root = document.createElement('section');
     root.className = 'win';
@@ -159,6 +187,7 @@ export class WindowManager {
     button.addEventListener('pointerdown', (event) => event.stopPropagation());
     button.addEventListener('click', (event) => {
       event.stopPropagation();
+      this.onSound();
       action();
     });
     return button;
@@ -167,7 +196,8 @@ export class WindowManager {
   /** CSS px on the glass per CSS px in the screen's own coordinate space. */
   private currentScale() {
     const rect = this.screenRoot.getBoundingClientRect();
-    return rect.width > 0 ? rect.width / SCREEN_PX.width : 1;
+    const width = this.screenRoot.offsetWidth || 1280;
+    return rect.width > 0 ? rect.width / width : 1;
   }
 
   private makeDraggable(entry: ManagedWindow, handle: HTMLElement) {
@@ -195,8 +225,9 @@ export class WindowManager {
       const dx = (event.clientX - startX) / scale;
       const dy = (event.clientY - startY) / scale;
 
-      const maxX = SCREEN_PX.width - 90;
-      const maxY = SCREEN_PX.height - TASKBAR_HEIGHT - 44;
+      const box = this.box;
+      const maxX = box.width - 90;
+      const maxY = box.height - TASKBAR_HEIGHT - 44;
       // Always leave a grabbable sliver of title bar on screen.
       const x = Math.min(Math.max(originX + dx, 90 - entry.root.offsetWidth), maxX);
       const y = Math.min(Math.max(originY + dy, 0), maxY);
@@ -266,10 +297,11 @@ export class WindowManager {
         width: entry.root.offsetWidth,
         height: entry.root.offsetHeight,
       };
+      const box = this.box;
       entry.root.style.left = '0px';
       entry.root.style.top = '0px';
-      entry.root.style.width = SCREEN_PX.width + 'px';
-      entry.root.style.height = SCREEN_PX.height - TASKBAR_HEIGHT + 'px';
+      entry.root.style.width = box.width + 'px';
+      entry.root.style.height = box.height - TASKBAR_HEIGHT + 'px';
       entry.maximised = true;
       entry.root.classList.add('is-maximised');
     }

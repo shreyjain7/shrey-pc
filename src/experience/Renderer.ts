@@ -1,5 +1,6 @@
 import {
   ACESFilmicToneMapping,
+  PCFShadowMap,
   PCFSoftShadowMap,
   Scene,
   SRGBColorSpace,
@@ -32,15 +33,18 @@ export class Renderer {
     this.webgl = new WebGLRenderer({
       canvas,
       alpha: true,
-      antialias: true,
+      // MSAA is not worth the fill rate on a phone.
+      antialias: sizes.quality === 'high',
       powerPreference: 'high-performance',
     });
     this.webgl.setClearColor(0x000000, 0);
     this.webgl.outputColorSpace = SRGBColorSpace;
     this.webgl.toneMapping = ACESFilmicToneMapping;
     this.webgl.toneMappingExposure = 1.05;
-    this.webgl.shadowMap.enabled = true;
-    this.webgl.shadowMap.type = PCFSoftShadowMap;
+    // Soft shadows are the single most expensive knob here, so weaker
+    // devices get the cheap filter and the low tier gets none at all.
+    this.webgl.shadowMap.enabled = sizes.quality !== 'low';
+    this.webgl.shadowMap.type = sizes.quality === 'high' ? PCFSoftShadowMap : PCFShadowMap;
 
     this.css = new CSS3DRenderer({ element: cssTarget });
 

@@ -11,10 +11,16 @@ import {
 type Launcher = (appId: string) => void;
 
 let launcher: Launcher = () => {};
+let onKeystroke: () => void = () => {};
 
 /** The OS wires this up so `open projects` can raise a real window. */
 export function setTerminalLauncher(next: Launcher) {
   launcher = next;
+}
+
+/** Fired per keypress so the audio engine can click a keycap. */
+export function setTerminalKeySound(next: () => void) {
+  onKeystroke = next;
 }
 
 interface Command {
@@ -271,6 +277,11 @@ export function createTerminal(): HTMLElement {
   };
 
   input.addEventListener('keydown', (event) => {
+    // Printable keys and the obvious editing keys all get a click.
+    if (event.key.length === 1 || event.key === 'Enter' || event.key === 'Backspace') {
+      onKeystroke();
+    }
+
     if (event.key === 'Enter') {
       event.preventDefault();
       run(input.value);

@@ -22,7 +22,7 @@ export class Desk {
       new BoxGeometry(DESK.width, DESK.thickness, DESK.depth),
       this.wood,
     );
-    top.position.set(0, DESK.top - DESK.thickness / 2, -DESK.depth / 2 + 0.1);
+    top.position.set(0, DESK.top - DESK.thickness / 2, DESK.centreZ);
     top.castShadow = true;
     top.receiveShadow = true;
     this.group.add(top);
@@ -31,7 +31,7 @@ export class Desk {
     const legGeometry = new BoxGeometry(0.05, legHeight, 0.05);
     const insetX = DESK.width / 2 - 0.08;
     const insetZ = DESK.depth / 2 - 0.08;
-    const centreZ = -DESK.depth / 2 + 0.1;
+    const centreZ = DESK.centreZ;
 
     for (const x of [-insetX, insetX]) {
       for (const z of [centreZ - insetZ, centreZ + insetZ]) {

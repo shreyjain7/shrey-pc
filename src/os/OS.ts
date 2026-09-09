@@ -1,27 +1,43 @@
+import type { Audio } from '../experience/Audio';
+import type { Sizes } from '../experience/Sizes';
 import { profile } from '../data/cv';
-import { SCREEN_PX } from '../world/layout';
 import { apps, appsById, icons } from './apps';
-import { setTerminalLauncher } from './Terminal';
+import { setTerminalKeySound, setTerminalLauncher } from './Terminal';
 import { WindowManager } from './WindowManager';
 
 export type OSState = 'standby' | 'booting' | 'desktop';
 
-const BOOT_LINES: Array<{ text: string; delay: number; className?: string }> = [
-  { text: 'SHREY BIOS v1.0.4 — 4:3 CRT SUBSYSTEM', delay: 0, className: 'boot__line--bright' },
-  { text: 'Copyright (C) Shrey Jain. All rights reserved.', delay: 90 },
+interface BootLine {
+  text: string;
+  delay: number;
+  className?: string;
+  /** Marks the line the RAM counter animates in place. */
+  ram?: boolean;
+}
+
+const RAM_TOTAL = 65536;
+
+const BOOT_LINES: BootLine[] = [
+  { text: 'SJBIOS (C)2000 Jain Systems Inc.,', delay: 0, className: 'boot__line--bright' },
+  { text: 'HSP S13 2000-2026 Special UC131S', delay: 70 },
+  { text: 'Released: 09/09/2026', delay: 70 },
   { text: '', delay: 40 },
-  { text: 'CPU        : Manipal Institute of Technology, B.Tech CSE', delay: 150 },
-  { text: 'Memory Test: 2023-2027 ... OK', delay: 210 },
-  { text: 'Detecting IDE drives ...', delay: 200 },
-  { text: '  Primary Master   : PYTHON', delay: 110 },
-  { text: '  Primary Slave    : C', delay: 90 },
-  { text: '  Secondary Master : MYSQL', delay: 90 },
-  { text: '  Secondary Slave  : GIT', delay: 90 },
+  { text: 'Main Processor : Shrey Jain, B.Tech CSE', delay: 150 },
+  { text: 'Manipal Institute of Technology  2023-2027', delay: 130 },
+  { text: '', delay: 40 },
+  { text: 'Memory Test : 0K OK', delay: 90, ram: true },
+  { text: '', delay: 900 },
+  { text: 'Detecting IDE Primary Master   ... PYTHON', delay: 130 },
+  { text: 'Detecting IDE Primary Slave    ... C', delay: 100 },
+  { text: 'Detecting IDE Secondary Master ... MYSQL', delay: 100 },
+  { text: 'Detecting IDE Secondary Slave  ... GIT', delay: 100 },
   { text: '', delay: 60 },
-  { text: 'Mounting /projects ... 3 found', delay: 190 },
-  { text: 'Mounting /experience ... 5 found', delay: 150 },
-  { text: 'Loading user profile: ' + profile.name, delay: 240, className: 'boot__line--bright' },
+  { text: 'Mounting /projects   ... 3 found', delay: 170 },
+  { text: 'Mounting /experience ... 5 found', delay: 140 },
+  { text: 'Mounting /education  ... 2 found', delay: 130 },
   { text: '', delay: 60 },
+  { text: 'Loading user profile: ' + profile.name, delay: 230, className: 'boot__line--bright' },
+  { text: '', delay: 50 },
   { text: 'Starting shrey-os ...', delay: 220, className: 'boot__line--accent' },
 ];
 
@@ -47,12 +63,14 @@ export class OS {
 
   private timers: number[] = [];
   private clockTimer = 0;
+  private ramTimer = 0;
 
-  constructor() {
+  constructor(
+    private audio: Audio,
+    sizes: Sizes,
+  ) {
     this.root = document.createElement('div');
     this.root.className = 'screen';
-    this.root.style.width = SCREEN_PX.width + 'px';
-    this.root.style.height = SCREEN_PX.height + 'px';
 
     this.standby = this.buildStandby();
     this.boot = this.buildBoot();
@@ -76,13 +94,23 @@ export class OS {
 
     this.root.append(crt, scanlines, vignette, flicker);
 
-    this.manager = new WindowManager(this.windowLayer, this.root);
+    this.manager = new WindowManager(this.windowLayer, this.root, () => this.audio.click());
     this.manager.setOnChange(() => this.syncTaskbar());
+
+    this.applyLayout(sizes);
+    sizes.on(() => this.applyLayout(sizes));
 
     setTerminalLauncher((appId) => {
       const app = appsById.get(appId);
       if (app) this.manager.open(app);
     });
+    setTerminalKeySound(() => this.audio.key());
+  }
+
+  /** Phones get bigger type and full-bleed windows. */
+  private applyLayout(sizes: Sizes) {
+    this.root.classList.toggle('is-compact', sizes.compact);
+    this.manager.setCompact(sizes.compact);
   }
 
   /* ---------------------------------------------------------------------- */
@@ -103,15 +131,11 @@ export class OS {
 
     const hint = document.createElement('p');
     hint.className = 'standby__hint';
-    hint.innerHTML = 'CLICK THE MONITOR TO BOOT<span class="caret"></span>';
+    hint.innerHTML = 'PRESS ANY KEY TO BOOT<span class="caret"></span>';
 
     layer.append(name, role, hint);
     return layer;
   }
-
-  /* ---------------------------------------------------------------------- */
-  /* Boot                                                                    */
-  /* ---------------------------------------------------------------------- */
 
   private buildBoot() {
     const layer = document.createElement('div');
@@ -146,6 +170,7 @@ export class OS {
 
       button.append(glyph, label);
       button.addEventListener('click', () => {
+        this.audio.click();
         this.closeStartMenu();
         this.manager.open(app);
       });
@@ -160,12 +185,13 @@ export class OS {
 
     const menuHead = document.createElement('div');
     menuHead.className = 'start-menu__head';
-    menuHead.innerHTML =
-      '<span class="start-menu__name">' +
-      profile.name +
-      '</span><span class="start-menu__role">' +
-      profile.role +
-      '</span>';
+    const menuName = document.createElement('span');
+    menuName.className = 'start-menu__name';
+    menuName.textContent = profile.name;
+    const menuRole = document.createElement('span');
+    menuRole.className = 'start-menu__role';
+    menuRole.textContent = profile.role;
+    menuHead.append(menuName, menuRole);
     startMenu.append(menuHead);
 
     const menuList = document.createElement('div');
@@ -177,6 +203,7 @@ export class OS {
       item.innerHTML = '<span class="start-menu__icon">' + app.icon + '</span>';
       item.append(document.createTextNode(app.title));
       item.addEventListener('click', () => {
+        this.audio.click();
         this.closeStartMenu();
         this.manager.open(app);
       });
@@ -190,6 +217,7 @@ export class OS {
     shutdown.innerHTML = '<span class="start-menu__icon">' + icons.terminal + '</span>';
     shutdown.append(document.createTextNode('Close all windows'));
     shutdown.addEventListener('click', () => {
+      this.audio.click();
       this.closeStartMenu();
       this.manager.closeAll();
     });
@@ -205,6 +233,7 @@ export class OS {
     startButton.append(document.createTextNode('Start'));
     startButton.addEventListener('click', (event) => {
       event.stopPropagation();
+      this.audio.click();
       this.startMenu.classList.toggle('is-open');
     });
 
@@ -246,7 +275,10 @@ export class OS {
       button.classList.toggle('is-minimised', this.manager.isMinimised(app.id));
       button.innerHTML = '<span class="taskbar__icon">' + app.icon + '</span>';
       button.append(document.createTextNode(app.title));
-      button.addEventListener('click', () => this.manager.toggle(app));
+      button.addEventListener('click', () => {
+        this.audio.click();
+        this.manager.toggle(app);
+      });
       this.taskbarApps.append(button);
     }
   }
@@ -271,6 +303,7 @@ export class OS {
     this.boot.classList.add('is-visible');
     this.boot.replaceChildren();
     this.brightness = 0.55;
+    this.audio.degauss();
 
     let elapsed = 0;
     for (const entry of BOOT_LINES) {
@@ -281,6 +314,7 @@ export class OS {
           line.className = 'boot__line' + (entry.className ? ' ' + entry.className : '');
           line.textContent = entry.text === '' ? ' ' : entry.text;
           this.boot.append(line);
+          if (entry.ram) this.countRam(line);
           this.boot.scrollTop = this.boot.scrollHeight;
         }, elapsed),
       );
@@ -288,9 +322,7 @@ export class OS {
 
     // A beat on the last line, then the CRT "snaps" into the desktop.
     this.timers.push(
-      window.setTimeout(() => {
-        this.root.classList.add('is-switching');
-      }, elapsed + 420),
+      window.setTimeout(() => this.root.classList.add('is-switching'), elapsed + 420),
     );
 
     this.timers.push(
@@ -300,6 +332,7 @@ export class OS {
         this.desktop.classList.add('is-visible');
         this.state = 'desktop';
         this.brightness = 1;
+        this.audio.chime();
 
         this.tickClock();
         this.clockTimer = window.setInterval(this.tickClock, 15000);
@@ -310,6 +343,26 @@ export class OS {
     );
   }
 
+  /** The classic POST memory count, ticking up in place. */
+  private countRam(line: HTMLElement) {
+    let value = 0;
+    const step = 4096;
+    this.ramTimer = window.setInterval(() => {
+      value = Math.min(value + step, RAM_TOTAL);
+      line.textContent = 'Memory Test : ' + value + 'K OK';
+      if (value >= RAM_TOTAL) window.clearInterval(this.ramTimer);
+    }, 45);
+  }
+
+  /**
+   * Fullscreen mode for phones: the screen stops being a fixed 1280x960
+   * surface projected onto glass and becomes a normal viewport-sized element,
+   * so text renders at true 1:1 pixels instead of being scaled into a stamp.
+   */
+  setOverlay(on: boolean) {
+    this.root.classList.toggle('is-overlay', on);
+  }
+
   /** Pointer events only reach the screen once the camera has settled on it. */
   setInteractive(interactive: boolean) {
     this.root.classList.toggle('is-interactive', interactive);
@@ -318,5 +371,6 @@ export class OS {
   destroy() {
     for (const timer of this.timers) window.clearTimeout(timer);
     window.clearInterval(this.clockTimer);
+    window.clearInterval(this.ramTimer);
   }
 }

@@ -7,9 +7,11 @@ import { Vector3 } from 'three';
 
 export const DESK = {
   top: 0.75,
-  width: 1.9,
-  depth: 0.8,
+  width: 1.98,
+  depth: 0.92,
   thickness: 0.04,
+  /** Centre of the top along Z; the front edge lands at centreZ + depth/2. */
+  centreZ: -0.16,
 };
 
 export const MONITOR = {
@@ -48,6 +50,6 @@ export const PX_TO_M = MONITOR.screenWidth / SCREEN_PX.width;
 
 /** Where the camera rests when nothing is focused. */
 export const IDLE_CAMERA = {
-  position: new Vector3(0.3, 1.31, 1.22),
-  target: new Vector3(0, 1.03, -0.12),
+  position: new Vector3(0.34, 1.4, 1.52),
+  target: new Vector3(0, 1.06, -0.15),
 };

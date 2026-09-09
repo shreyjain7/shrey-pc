@@ -1,4 +1,5 @@
 import {
+  AdditiveBlending,
   BoxGeometry,
   CylinderGeometry,
   DoubleSide,
@@ -12,7 +13,9 @@ import {
   RectAreaLight,
 } from 'three';
 import { CSS3DObject } from 'three/examples/jsm/renderers/CSS3DRenderer.js';
+import type { Quality } from '../experience/Sizes';
 import { roundedSlab, taperAlongZ } from './geometry';
+import { smudgeTexture, vignetteTexture } from './textures';
 import { DESK, MONITOR, PX_TO_M, SCREEN_CENTER, SCREEN_PX, SCREEN_Z } from './layout';
 
 const OPENING_W = MONITOR.screenWidth + 0.006;
@@ -31,6 +34,7 @@ export class Monitor {
   readonly hitboxes: Object3D[] = [];
 
   readonly powerLed: Mesh;
+
   private readonly screenLight: RectAreaLight;
 
   private readonly plastic = new MeshStandardMaterial({
@@ -45,7 +49,7 @@ export class Monitor {
     metalness: 0.05,
   });
 
-  constructor(screenElement: HTMLElement) {
+  constructor(screenElement: HTMLElement, quality: Quality) {
     // The glass sits a little above the desk on a swivel base.
     const bezelCentreY =
       DESK.top + MONITOR.standHeight + MONITOR.bezel + MONITOR.screenHeight / 2;
@@ -147,9 +151,9 @@ export class Monitor {
     cssObject.scale.setScalar(PX_TO_M);
     this.group.add(cssObject);
 
-    // --- Glass sheen ---------------------------------------------------------
-    // Drawn after everything, tinting the DOM underneath just enough to read as
-    // a sheet of curved glass rather than a flat div.
+    // --- Glass ---------------------------------------------------------------
+    // Three thin planes stacked in front of the DOM, all drawn after it:
+    // a tint, the tube's corner falloff, and dust caught in the light.
     const glass = new Mesh(
       new PlaneGeometry(MONITOR.screenWidth, MONITOR.screenHeight),
       new MeshPhysicalMaterial({
@@ -164,6 +168,37 @@ export class Monitor {
     glass.position.set(SCREEN_CENTER.x, SCREEN_CENTER.y, SCREEN_Z + 0.003);
     glass.renderOrder = 10;
     this.group.add(glass);
+
+    // Corners of a real tube fall off; the alphaMap's luminance is the mask.
+    const vignette = new Mesh(
+      new PlaneGeometry(MONITOR.screenWidth, MONITOR.screenHeight),
+      new MeshBasicMaterial({
+        color: 0x000000,
+        transparent: true,
+        opacity: 0.6,
+        alphaMap: vignetteTexture(),
+        depthWrite: false,
+      }),
+    );
+    vignette.position.set(SCREEN_CENTER.x, SCREEN_CENTER.y, SCREEN_Z + 0.0035);
+    vignette.renderOrder = 11;
+    this.group.add(vignette);
+
+    if (quality !== 'low') {
+      const smudge = new Mesh(
+        new PlaneGeometry(MONITOR.screenWidth, MONITOR.screenHeight),
+        new MeshBasicMaterial({
+          map: smudgeTexture(),
+          transparent: true,
+          opacity: 0.16,
+          blending: AdditiveBlending,
+          depthWrite: false,
+        }),
+      );
+      smudge.position.set(SCREEN_CENTER.x, SCREEN_CENTER.y, SCREEN_Z + 0.004);
+      smudge.renderOrder = 12;
+      this.group.add(smudge);
+    }
 
     // --- Screen spill --------------------------------------------------------
     // The single most important light in the room: it puts the monitor's own

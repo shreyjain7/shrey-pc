@@ -23,6 +23,10 @@
   --sans: system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
 
   position: relative;
+  /* Fills whatever hosts it: the 1280x960 mount on the glass, or the
+     viewport-sized overlay on a phone. */
+  width: 100%;
+  height: 100%;
   overflow: hidden;
   background: #05070a;
   color: var(--text);
@@ -1094,4 +1098,208 @@
   border-top: 1px solid var(--line-soft);
   border-radius: 0 0 6px 6px;
   color: var(--accent-warm);
+}
+
+/* =========================================================================
+   Fullscreen overlay mode (phones)
+
+   Same OS, but the screen element is the viewport rather than a fixed
+   1280x960 surface scaled onto glass, so every px below is a real px.
+   ========================================================================= */
+
+.screen.is-overlay {
+  font-size: 15px;
+}
+
+/* Scanlines sized for a 1280px surface look like blinds at 1:1. */
+.screen.is-overlay .crt__scanlines {
+  opacity: 0.22;
+  background-size: 100% 3px;
+}
+
+.screen.is-overlay .crt__vignette {
+  opacity: 0.5;
+}
+
+.screen.is-overlay .layer--boot {
+  padding: 20px 18px;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.screen.is-overlay .standby__name {
+  font-size: 30px;
+  letter-spacing: 2px;
+}
+
+.screen.is-overlay .standby__role {
+  font-size: 12px;
+  letter-spacing: 3px;
+}
+
+.screen.is-overlay .standby__hint {
+  margin-top: 26px;
+  font-size: 11px;
+  letter-spacing: 1.6px;
+}
+
+/* --- Compact desktop ----------------------------------------------------- */
+
+.screen.is-compact .icons {
+  top: 14px;
+  left: 12px;
+  right: 12px;
+  grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
+  gap: 2px;
+}
+
+.screen.is-compact .icon {
+  gap: 6px;
+  padding: 10px 4px 8px;
+  font-size: 11px;
+}
+
+.screen.is-compact .icon__glyph {
+  width: 40px;
+  height: 40px;
+}
+
+.screen.is-compact .icon__glyph svg {
+  width: 21px;
+  height: 21px;
+}
+
+/* Windows are full-bleed here, so the chrome shrinks to give content room. */
+.screen.is-compact .win__bar {
+  height: 44px;
+  padding: 0 8px 0 12px;
+}
+
+.screen.is-compact .win__title {
+  font-size: 13px;
+}
+
+/* Bigger tap targets than the desktop dots. */
+.screen.is-compact .win__control {
+  width: 20px;
+  height: 20px;
+}
+
+.screen.is-compact .win__controls {
+  gap: 10px;
+}
+
+.screen.is-compact .doc {
+  padding: 18px 16px 26px;
+}
+
+.screen.is-compact .doc__title {
+  font-size: 20px;
+}
+
+.screen.is-compact .hero {
+  gap: 14px;
+  margin-bottom: 18px;
+  padding-bottom: 16px;
+}
+
+.screen.is-compact .hero__avatar {
+  width: 62px;
+  height: 62px;
+  font-size: 22px;
+}
+
+.screen.is-compact .hero__name {
+  font-size: 22px;
+}
+
+.screen.is-compact .entry__top {
+  flex-direction: column;
+  gap: 4px;
+}
+
+.screen.is-compact .entry__period {
+  white-space: normal;
+}
+
+.screen.is-compact .skill-grid {
+  grid-template-columns: 1fr;
+}
+
+.screen.is-compact .link-row {
+  flex-wrap: wrap;
+  gap: 4px 12px;
+}
+
+.screen.is-compact .link-row__label {
+  flex-basis: 100%;
+}
+
+.screen.is-compact .link-row__value {
+  font-size: 13px;
+}
+
+.screen.is-compact .sheet {
+  padding: 20px 16px;
+}
+
+.screen.is-compact .sheet__head h1 {
+  font-size: 22px;
+}
+
+.screen.is-compact .resume__toolbar {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
+}
+
+.screen.is-compact .button {
+  text-align: center;
+}
+
+/* The taskbar stays 56px tall to match the window manager's arithmetic. */
+.screen.is-compact .taskbar {
+  gap: 8px;
+  padding: 0 8px;
+}
+
+.screen.is-compact .taskbar__start {
+  padding: 8px 12px 8px 10px;
+  font-size: 12px;
+}
+
+.screen.is-compact .taskbar__apps {
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.screen.is-compact .taskbar__apps::-webkit-scrollbar {
+  display: none;
+}
+
+.screen.is-compact .taskbar__app {
+  flex: 0 0 auto;
+  max-width: 140px;
+  padding: 8px 10px;
+  font-size: 12px;
+}
+
+.screen.is-compact .taskbar__clock {
+  font-size: 12px;
+}
+
+.screen.is-compact .start-menu {
+  left: 8px;
+  right: 8px;
+  bottom: 62px;
+  width: auto;
+}
+
+.screen.is-compact .start-menu__list {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+}
+
+.screen.is-compact .term {
+  font-size: 13px;
 }

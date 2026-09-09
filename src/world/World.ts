@@ -1,6 +1,7 @@
 import {
   AmbientLight,
   DirectionalLight,
+  FogExp2,
   HemisphereLight,
   Raycaster,
   Scene,
@@ -10,59 +11,114 @@ import { RectAreaLightUniformsLib } from 'three/examples/jsm/lights/RectAreaLigh
 import type { Camera } from '../experience/Camera';
 import type { Sizes } from '../experience/Sizes';
 import { Desk } from './Desk';
+import { Dust } from './Dust';
 import { Monitor } from './Monitor';
 import { Peripherals } from './Peripherals';
 import { Room } from './Room';
 
-/** Assembles the scene and owns the "did the user click the monitor?" question. */
-export class World {
-  readonly monitor: Monitor;
+export interface BuildStep {
+  name: string;
+  run: () => void;
+}
 
+/**
+ * Assembles the scene and owns the "did the user click the monitor?" question.
+ *
+ * Construction is split into named steps so the loading screen can report what
+ * it is actually doing rather than animating a fake bar.
+ */
+export class World {
+  monitor!: Monitor;
+
+  private dust!: Dust;
   private readonly raycaster = new Raycaster();
   private readonly pointer = new Vector2();
   private pointerDownAt: { x: number; y: number } | null = null;
   private hovering = false;
 
   constructor(
-    scene: Scene,
+    private scene: Scene,
     private camera: Camera,
     private sizes: Sizes,
-    screenElement: HTMLElement,
+    private screenElement: HTMLElement,
     private onMonitorClick: () => void,
   ) {
-    // Required before any RectAreaLight can be lit.
-    RectAreaLightUniformsLib.init();
-
-    const room = new Room();
-    const desk = new Desk();
-    this.monitor = new Monitor(screenElement);
-    const peripherals = new Peripherals();
-
-    scene.add(room.group, desk.group, this.monitor.group, peripherals.group);
-
-    scene.add(new AmbientLight(0x9099b5, 0.75));
-    scene.add(new HemisphereLight(0x6d7ea3, 0x2a211b, 1.05));
-
-    const key = new DirectionalLight(0xbfd0ff, 1.15);
-    key.position.set(-2.2, 3.4, 2.4);
-    key.castShadow = true;
-    key.shadow.mapSize.set(2048, 2048);
-    key.shadow.camera.near = 0.5;
-    key.shadow.camera.far = 10;
-    key.shadow.camera.left = -2.5;
-    key.shadow.camera.right = 2.5;
-    key.shadow.camera.top = 2.5;
-    key.shadow.camera.bottom = -2.5;
-    key.shadow.bias = -0.0012;
-    scene.add(key);
-
-    const rim = new DirectionalLight(0x8899cc, 0.5);
-    rim.position.set(2.6, 1.6, -2.2);
-    scene.add(rim);
-
     window.addEventListener('pointerdown', this.onPointerDown);
     window.addEventListener('pointerup', this.onPointerUp);
     window.addEventListener('pointermove', this.onPointerMove);
+  }
+
+  /** The ordered work of building the scene, one named chunk at a time. */
+  steps(): BuildStep[] {
+    const quality = this.sizes.quality;
+
+    return [
+      {
+        name: 'room.geo',
+        run: () => {
+          // Required before any RectAreaLight can be lit.
+          RectAreaLightUniformsLib.init();
+          // Just enough haze for the lamp and window to read as volumes.
+          this.scene.fog = new FogExp2(0x0a0d14, quality === 'low' ? 0.05 : 0.08);
+          this.scene.add(new Room(quality).group);
+        },
+      },
+      {
+        name: 'desk.geo',
+        run: () => {
+          this.scene.add(new Desk().group);
+        },
+      },
+      {
+        name: 'crt.assembly',
+        run: () => {
+          this.monitor = new Monitor(this.screenElement, quality);
+          this.scene.add(this.monitor.group);
+        },
+      },
+      {
+        name: 'peripherals.geo',
+        run: () => {
+          this.scene.add(new Peripherals(quality).group);
+        },
+      },
+      {
+        name: 'lighting.rig',
+        run: () => {
+          this.scene.add(new AmbientLight(0x9099b5, 0.75));
+          this.scene.add(new HemisphereLight(0x6d7ea3, 0x2a211b, 1.05));
+
+          const key = new DirectionalLight(0xbfd0ff, 1.15);
+          key.position.set(-2.2, 3.4, 2.4);
+          key.castShadow = quality !== 'low';
+          const shadowSize = quality === 'high' ? 2048 : 1024;
+          key.shadow.mapSize.set(shadowSize, shadowSize);
+          key.shadow.camera.near = 0.5;
+          key.shadow.camera.far = 10;
+          key.shadow.camera.left = -2.5;
+          key.shadow.camera.right = 2.5;
+          key.shadow.camera.top = 2.5;
+          key.shadow.camera.bottom = -2.5;
+          key.shadow.bias = -0.0012;
+          this.scene.add(key);
+
+          const rim = new DirectionalLight(0x8899cc, 0.5);
+          rim.position.set(2.6, 1.6, -2.2);
+          this.scene.add(rim);
+        },
+      },
+      {
+        name: 'dust.particles',
+        run: () => {
+          this.dust = new Dust(quality);
+          this.scene.add(this.dust.points);
+        },
+      },
+    ];
+  }
+
+  update(delta: number, elapsed: number) {
+    this.dust?.update(delta, elapsed);
   }
 
   private setPointer(event: PointerEvent) {
@@ -71,6 +127,7 @@ export class World {
   }
 
   private hitsMonitor(event: PointerEvent) {
+    if (!this.monitor) return false;
     this.setPointer(event);
     this.raycaster.setFromCamera(this.pointer, this.camera.instance);
     return this.raycaster.intersectObjects(this.monitor.hitboxes, false).length > 0;
@@ -85,14 +142,17 @@ export class World {
     this.pointerDownAt = null;
     if (!down || this.camera.mode !== 'idle') return;
 
-    // Ignore drags — only a clean tap should fly the camera in.
+    // Ignore drags — the camera orbits on drag, so only a clean tap flies in.
     const travelled = Math.hypot(event.clientX - down.x, event.clientY - down.y);
-    if (travelled > 8) return;
+    if (travelled > 10) return;
 
     if (this.hitsMonitor(event)) this.onMonitorClick();
   };
 
   private onPointerMove = (event: PointerEvent) => {
+    // Hover styling is meaningless on touch and costs a raycast per move.
+    if (this.sizes.touch) return;
+
     if (this.camera.mode !== 'idle') {
       if (this.hovering) {
         this.hovering = false;

@@ -1,5 +1,6 @@
 import {
   BoxGeometry,
+  CatmullRomCurve3,
   CylinderGeometry,
   Group,
   InstancedMesh,
@@ -8,11 +9,16 @@ import {
   MeshBasicMaterial,
   MeshStandardMaterial,
   Object3D,
+  PlaneGeometry,
   SphereGeometry,
   SpotLight,
   TorusGeometry,
+  TubeGeometry,
+  Vector3,
 } from 'three';
+import type { Quality } from '../experience/Sizes';
 import { roundedSlab } from './geometry';
+import { stickyNoteTexture } from './textures';
 import { DESK, MONITOR } from './layout';
 
 /** Everything else on and around the desk. Set dressing, but it sells the room. */
@@ -44,16 +50,40 @@ export class Peripherals {
     metalness: 0.85,
   });
 
-  constructor() {
-    this.group.add(this.buildKeyboard());
-    this.group.add(this.buildMouse());
-    this.group.add(this.buildTower());
-    this.group.add(this.buildMug());
-    this.group.add(this.buildBooks());
+  private readonly rubber = new MeshStandardMaterial({ color: 0x1a1a1f, roughness: 0.95 });
+
+  constructor(private quality: Quality) {
+    this.group.add(
+      this.buildMousepad(),
+      this.buildKeyboard(),
+      this.buildMouse(),
+      this.buildTower(),
+      this.buildMug(),
+      this.buildBooks(),
+      this.buildPenCup(),
+      this.buildCables(),
+    );
+
+    if (quality !== 'low') {
+      this.group.add(this.buildSpeakers(), this.buildHeadphones(), this.buildStickyNotes());
+    }
 
     const lamp = this.buildLamp();
     this.deskLamp = lamp.light;
     this.group.add(lamp.group);
+  }
+
+  /* ---------------------------------------------------------------------- */
+
+  private buildMousepad() {
+    const pad = new Mesh(
+      roundedSlab(0.62, 0.24, 0.014, { depth: 0.004 }),
+      new MeshStandardMaterial({ color: 0x1d2027, roughness: 0.96 }),
+    );
+    pad.rotation.x = -Math.PI / 2;
+    pad.position.set(0.06, DESK.top + 0.002, 0.09);
+    pad.receiveShadow = true;
+    return pad;
   }
 
   private buildKeyboard() {
@@ -75,12 +105,12 @@ export class Peripherals {
     const rows = 5;
     const keySize = 0.023;
     const gap = 0.0045;
-    const keys = new InstancedMesh(
+    const keycaps = new InstancedMesh(
       new BoxGeometry(keySize, 0.007, keySize),
       new MeshStandardMaterial({ color: 0x33333a, roughness: 0.85 }),
       columns * rows,
     );
-    keys.castShadow = true;
+    keycaps.castShadow = true;
 
     const dummy = new Object3D();
     const matrix = new Matrix4();
@@ -97,14 +127,31 @@ export class Peripherals {
         );
         dummy.updateMatrix();
         matrix.copy(dummy.matrix);
-        keys.setMatrixAt(index, matrix);
+        keycaps.setMatrixAt(index, matrix);
         index += 1;
       }
     }
-    keys.instanceMatrix.needsUpdate = true;
-    group.add(keys);
+    keycaps.instanceMatrix.needsUpdate = true;
+    group.add(keycaps);
 
-    group.position.set(-0.02, DESK.top, MONITOR.frontZ + 0.24);
+    // Spacebar, across the front row.
+    const spacebar = new Mesh(new BoxGeometry(keySize * 6, 0.007, keySize), this.darkPlastic);
+    spacebar.position.set(0, 0.012, spanZ / 2 + keySize + gap * 2);
+    spacebar.castShadow = true;
+    group.add(spacebar);
+
+    // Status LEDs.
+    for (let i = 0; i < 3; i += 1) {
+      const led = new Mesh(
+        new PlaneGeometry(0.005, 0.003),
+        new MeshBasicMaterial({ color: i === 1 ? 0x66ff9a : 0x24242a }),
+      );
+      led.rotation.x = -Math.PI / 2;
+      led.position.set(width / 2 - 0.05 + i * 0.013, 0.0195, -depth / 2 + 0.014);
+      group.add(led);
+    }
+
+    group.position.set(-0.02, DESK.top, 0.1);
     // A couple of degrees of tilt, like feet-up on a real board.
     group.rotation.x = -0.045;
     group.rotation.y = 0.04;
@@ -123,7 +170,12 @@ export class Peripherals {
     split.position.set(0, 0.0155, -0.016);
     group.add(split);
 
-    group.position.set(0.31, DESK.top + 0.014, MONITOR.frontZ + 0.245);
+    const wheel = new Mesh(new CylinderGeometry(0.005, 0.005, 0.004, 10), this.darkPlastic);
+    wheel.rotation.z = Math.PI / 2;
+    wheel.position.set(0, 0.017, -0.021);
+    group.add(wheel);
+
+    group.position.set(0.31, DESK.top + 0.014, 0.1);
     group.rotation.y = -0.16;
     return group;
   }
@@ -145,12 +197,26 @@ export class Peripherals {
     slot.position.set(0, 0.35, 0.226);
     group.add(slot);
 
+    // Front intake grille.
+    for (let i = 0; i < 6; i += 1) {
+      const vent = new Mesh(new BoxGeometry(0.12, 0.004, 0.003), this.darkPlastic);
+      vent.position.set(0, 0.1 + i * 0.014, 0.223);
+      group.add(vent);
+    }
+
     const powerLight = new Mesh(
       new SphereGeometry(0.005, 10, 8),
       new MeshBasicMaterial({ color: 0x4fd1ff }),
     );
     powerLight.position.set(0.06, 0.27, 0.226);
     group.add(powerLight);
+
+    const driveLight = new Mesh(
+      new SphereGeometry(0.0035, 8, 6),
+      new MeshBasicMaterial({ color: 0xff9a4f }),
+    );
+    driveLight.position.set(0.035, 0.27, 0.226);
+    group.add(driveLight);
 
     group.position.set(-0.9, 0, -0.5);
     group.rotation.y = 0.14;
@@ -179,7 +245,7 @@ export class Peripherals {
     handle.castShadow = true;
     group.add(handle);
 
-    group.position.set(0.46, DESK.top, MONITOR.frontZ + 0.06);
+    group.position.set(0.46, DESK.top, 0.02);
     return group;
   }
 
@@ -199,8 +265,151 @@ export class Peripherals {
       group.add(book);
     });
 
-    group.position.set(-0.52, DESK.top, MONITOR.frontZ + 0.02);
+    group.position.set(-0.52, DESK.top, -0.02);
     group.rotation.y = 0.22;
+    return group;
+  }
+
+  private buildPenCup() {
+    const group = new Group();
+
+    const cup = new Mesh(
+      new CylinderGeometry(0.035, 0.031, 0.1, 18, 1, true),
+      new MeshStandardMaterial({ color: 0x2d3138, roughness: 0.6, metalness: 0.4, side: 2 }),
+    );
+    cup.position.y = 0.05;
+    cup.castShadow = true;
+    group.add(cup);
+
+    const inks = [0x2b6cb0, 0xc53030, 0x2f855a, 0x1a202c, 0xd69e2e];
+    inks.forEach((color, index) => {
+      const pen = new Mesh(
+        new CylinderGeometry(0.0035, 0.0035, 0.15, 8),
+        new MeshStandardMaterial({ color, roughness: 0.45 }),
+      );
+      const angle = (index / inks.length) * Math.PI * 2;
+      pen.position.set(Math.cos(angle) * 0.014, 0.095, Math.sin(angle) * 0.014);
+      pen.rotation.set(Math.sin(angle) * 0.22, 0, -Math.cos(angle) * 0.22);
+      pen.castShadow = true;
+      group.add(pen);
+    });
+
+    group.position.set(0.63, DESK.top, -0.14);
+    return group;
+  }
+
+  private buildSpeakers() {
+    const group = new Group();
+
+    for (const x of [-0.78, 0.8]) {
+      const speaker = new Group();
+
+      const box = new Mesh(new BoxGeometry(0.085, 0.17, 0.085), this.darkPlastic);
+      box.position.y = 0.085;
+      box.castShadow = true;
+      speaker.add(box);
+
+      const cone = new Mesh(new CylinderGeometry(0.028, 0.028, 0.008, 18), this.rubber);
+      cone.rotation.x = Math.PI / 2;
+      cone.position.set(0, 0.105, 0.044);
+      speaker.add(cone);
+
+      const tweeter = new Mesh(new CylinderGeometry(0.012, 0.012, 0.006, 14), this.rubber);
+      tweeter.rotation.x = Math.PI / 2;
+      tweeter.position.set(0, 0.045, 0.044);
+      speaker.add(tweeter);
+
+      speaker.position.set(x, DESK.top, -0.3);
+      // Toed in toward the chair.
+      speaker.rotation.y = x < 0 ? 0.42 : -0.42;
+      group.add(speaker);
+    }
+
+    return group;
+  }
+
+  private buildHeadphones() {
+    const group = new Group();
+
+    const band = new Mesh(
+      new TorusGeometry(0.062, 0.008, 8, 26, Math.PI * 1.05),
+      this.darkPlastic,
+    );
+    band.rotation.z = -Math.PI / 2;
+    band.rotation.y = 0.3;
+    band.position.y = 0.062;
+    band.castShadow = true;
+    group.add(band);
+
+    for (const side of [-1, 1]) {
+      const cup = new Mesh(new CylinderGeometry(0.032, 0.032, 0.022, 18), this.rubber);
+      cup.rotation.z = Math.PI / 2;
+      cup.position.set(side * 0.058 * Math.cos(0.3), 0.03, side * 0.058 * Math.sin(0.3));
+      cup.castShadow = true;
+      group.add(cup);
+    }
+
+    group.position.set(0.78, DESK.top, 0.08);
+    group.rotation.y = -0.5;
+    return group;
+  }
+
+  private buildStickyNotes() {
+    const group = new Group();
+    const colours = ['#f6e05e', '#f6ad55', '#9ae6b4'];
+
+    const spots = [
+      { x: 0.0, z: 0.0, turn: 0.22 },
+      { x: 0.068, z: 0.035, turn: -0.35 },
+      { x: 0.03, z: -0.055, turn: 0.6 },
+    ];
+
+    colours.forEach((colour, index) => {
+      const note = new Mesh(
+        new PlaneGeometry(0.058, 0.058),
+        new MeshStandardMaterial({ map: stickyNoteTexture(colour), roughness: 0.95 }),
+      );
+      const spot = spots[index];
+      // Lying flat on the desk, slightly overlapping and askew.
+      note.rotation.x = -Math.PI / 2;
+      note.rotation.z = spot.turn;
+      note.position.set(0.6 + spot.x, DESK.top + 0.001 + index * 0.0006, 0.1 + spot.z);
+      note.receiveShadow = true;
+      group.add(note);
+    });
+
+    return group;
+  }
+
+  /** Power and signal runs from the monitor down to the tower. */
+  private buildCables() {
+    const group = new Group();
+    const material = new MeshStandardMaterial({ color: 0x121215, roughness: 0.85 });
+    const segments = this.quality === 'low' ? 12 : 26;
+
+    const runs: Vector3[][] = [
+      [
+        new Vector3(-0.08, 0.82, MONITOR.frontZ - 0.42),
+        new Vector3(-0.32, 0.7, -0.52),
+        new Vector3(-0.62, 0.34, -0.6),
+        new Vector3(-0.84, 0.16, -0.55),
+        new Vector3(-0.86, 0.4, -0.42),
+      ],
+      [
+        new Vector3(0.06, 0.8, MONITOR.frontZ - 0.42),
+        new Vector3(0.1, 0.62, -0.6),
+        new Vector3(-0.3, 0.1, -0.72),
+        new Vector3(-0.78, 0.06, -0.66),
+      ],
+    ];
+
+    for (const points of runs) {
+      const curve = new CatmullRomCurve3(points);
+      const tube = new Mesh(new TubeGeometry(curve, segments, 0.006, 6, false), material);
+      tube.castShadow = this.quality === 'high';
+      group.add(tube);
+    }
+
     return group;
   }
 
@@ -250,12 +459,12 @@ export class Peripherals {
     light.position.set(0.175, 0.295, 0.07);
     // Aimed at the desk surface beside the books, not down at the floor.
     light.target.position.set(0.29, 0, 0.28);
-    light.castShadow = true;
-    light.shadow.mapSize.set(1024, 1024);
+    light.castShadow = this.quality !== 'low';
+    light.shadow.mapSize.set(this.quality === 'high' ? 1024 : 512, this.quality === 'high' ? 1024 : 512);
     light.shadow.bias = -0.0015;
     group.add(light, light.target);
 
-    group.position.set(-0.74, DESK.top, MONITOR.frontZ - 0.16);
+    group.position.set(-0.74, DESK.top, -0.18);
     return { group, light };
   }
 }

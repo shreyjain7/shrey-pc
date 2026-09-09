@@ -2,7 +2,14 @@ import type { Audio } from '../experience/Audio';
 import type { Sizes } from '../experience/Sizes';
 import { profile } from '../data/cv';
 import { apps, appsById, icons } from './apps';
-import { setTerminalKeySound, setTerminalLauncher } from './Terminal';
+import { fileIcon } from './apps/Explorer';
+import { closeContextMenu, openContextMenu } from './ContextMenu';
+import { basename, fs, HOME, join } from './fs';
+import { mountNotifications, notify } from './Notifications';
+import { settings } from './settings';
+import { openPath, registerSystem } from './system';
+import { setTerminalKeySound } from './Terminal';
+import { askForName, confirmAction, el, svg } from './ui';
 import { WindowManager } from './WindowManager';
 
 export type OSState = 'standby' | 'booting' | 'desktop';
@@ -11,7 +18,6 @@ interface BootLine {
   text: string;
   delay: number;
   className?: string;
-  /** Marks the line the RAM counter animates in place. */
   ram?: boolean;
 }
 
@@ -32,18 +38,26 @@ const BOOT_LINES: BootLine[] = [
   { text: 'Detecting IDE Secondary Master ... MYSQL', delay: 100 },
   { text: 'Detecting IDE Secondary Slave  ... GIT', delay: 100 },
   { text: '', delay: 60 },
-  { text: 'Mounting /projects   ... 3 found', delay: 170 },
-  { text: 'Mounting /experience ... 5 found', delay: 140 },
-  { text: 'Mounting /education  ... 2 found', delay: 130 },
-  { text: '', delay: 60 },
-  { text: 'Loading user profile: ' + profile.name, delay: 230, className: 'boot__line--bright' },
-  { text: '', delay: 50 },
-  { text: 'Starting shrey-os ...', delay: 220, className: 'boot__line--accent' },
+  { text: 'Mounting /home/shrey ... OK', delay: 170 },
+  { text: 'Starting shrey-os 1.0 ...', delay: 220, className: 'boot__line--accent' },
 ];
 
+const MENU_ICONS = {
+  newFolder: svg('<path d="M3 7.4A1.4 1.4 0 0 1 4.4 6h4.2l1.9 2.2h9.1A1.4 1.4 0 0 1 21 9.6v8A1.4 1.4 0 0 1 19.6 19H4.4A1.4 1.4 0 0 1 3 17.6z"/><path d="M12 11.5v5M9.5 14h5"/>'),
+  newFile: svg('<path d="M14 3H7a1.8 1.8 0 0 0-1.8 1.8v14.4A1.8 1.8 0 0 0 7 21h10a1.8 1.8 0 0 0 1.8-1.8V8z"/><path d="M14 3v5h4.8"/>'),
+  refresh: svg('<path d="M20 12a8 8 0 1 1-2.6-5.9"/><path d="M20 4.4V9h-4.6"/>'),
+  trash: svg('<path d="M4.5 7h15"/><path d="M6.5 7v12.1A1.9 1.9 0 0 0 8.4 21h7.2a1.9 1.9 0 0 0 1.9-1.9V7"/>'),
+  rename: svg('<path d="M4 20h16"/><path d="M14.5 4.5 19 9 9 19H4.5v-4.5z"/>'),
+  search: svg('<circle cx="11" cy="11" r="6.5"/><path d="m16 16 4 4"/>'),
+  power: svg('<path d="M12 4v8"/><path d="M17.7 7.3a8 8 0 1 1-11.4 0"/>'),
+  sound: svg('<path d="M11 5 6.5 8.8H3.4v6.4h3.1L11 19z"/><path d="M15.4 9.2a4 4 0 0 1 0 5.6"/>'),
+};
+
+const DESKTOP_DIR = join(HOME, 'Desktop');
+
 /**
- * The whole operating system that lives on the CRT: a standby screen, a fake
- * POST sequence, and a desktop with draggable windows built from the CV data.
+ * shrey-os: a desktop environment running on the CRT. Icons, windows, a file
+ * manager, a shell and a handful of apps, all over the virtual filesystem.
  */
 export class OS {
   readonly root: HTMLElement;
@@ -55,12 +69,17 @@ export class OS {
   private readonly standby: HTMLElement;
   private readonly boot: HTMLElement;
   private readonly desktop: HTMLElement;
+  private readonly iconGrid: HTMLElement;
   private readonly windowLayer: HTMLElement;
   private readonly taskbarApps: HTMLElement;
   private readonly clock: HTMLElement;
+  private readonly calendar: HTMLElement;
   private readonly startMenu: HTMLElement;
+  private readonly startList: HTMLElement;
+  private readonly search: HTMLInputElement;
   private readonly manager: WindowManager;
 
+  private selected: string | null = null;
   private timers: number[] = [];
   private clockTimer = 0;
   private ramTimer = 0;
@@ -69,30 +88,45 @@ export class OS {
     private audio: Audio,
     sizes: Sizes,
   ) {
-    this.root = document.createElement('div');
-    this.root.className = 'screen';
+    this.root = el('div', 'screen');
 
     this.standby = this.buildStandby();
-    this.boot = this.buildBoot();
-    this.desktop = this.buildDesktop();
+    this.boot = el('div', 'layer layer--boot');
+    this.desktop = el('div', 'layer layer--desktop');
 
-    this.windowLayer = this.desktop.querySelector('.windows') as HTMLElement;
-    this.taskbarApps = this.desktop.querySelector('.taskbar__apps') as HTMLElement;
-    this.clock = this.desktop.querySelector('.taskbar__clock') as HTMLElement;
-    this.startMenu = this.desktop.querySelector('.start-menu') as HTMLElement;
+    this.iconGrid = el('div', 'icons');
+    this.windowLayer = el('div', 'windows');
 
-    const crt = document.createElement('div');
-    crt.className = 'crt';
+    const startBits = this.buildStartMenu();
+    this.startMenu = startBits.menu;
+    this.startList = startBits.list;
+    this.search = startBits.search;
+
+    const taskbarBits = this.buildTaskbar();
+    this.taskbarApps = taskbarBits.appsHost;
+    this.clock = taskbarBits.clock;
+    this.calendar = taskbarBits.calendar;
+
+    this.desktop.append(
+      this.iconGrid,
+      this.windowLayer,
+      this.startMenu,
+      this.calendar,
+      taskbarBits.taskbar,
+    );
+
+    const crt = el('div', 'crt');
     crt.append(this.standby, this.boot, this.desktop);
 
-    const scanlines = document.createElement('div');
-    scanlines.className = 'crt__scanlines';
-    const vignette = document.createElement('div');
-    vignette.className = 'crt__vignette';
-    const flicker = document.createElement('div');
-    flicker.className = 'crt__flicker';
+    this.root.append(
+      crt,
+      el('div', 'crt__scanlines'),
+      el('div', 'crt__vignette'),
+      el('div', 'crt__flicker'),
+    );
 
-    this.root.append(crt, scanlines, vignette, flicker);
+    mountNotifications(this.root);
+    settings.attach(this.root);
 
     this.manager = new WindowManager(this.windowLayer, this.root, () => this.audio.click());
     this.manager.setOnChange(() => this.syncTaskbar());
@@ -100,17 +134,37 @@ export class OS {
     this.applyLayout(sizes);
     sizes.on(() => this.applyLayout(sizes));
 
-    setTerminalLauncher((appId) => {
-      const app = appsById.get(appId);
-      if (app) this.manager.open(app);
+    registerSystem({
+      openApp: (id) => {
+        const app = appsById.get(id);
+        if (app) this.manager.open(app);
+      },
+      closeApp: (id) => this.manager.close(id),
+      screen: () => this.root,
     });
-    setTerminalKeySound(() => this.audio.key());
+
+    setTerminalKeySound(() => {
+      if (settings.state.keySounds) this.audio.key();
+    });
+
+    fs.on(() => this.renderIcons());
+    settings.on(() => this.tickClock());
+
+    this.bindDesktop();
+    this.bindShortcuts();
+    this.renderIcons();
   }
 
-  /** Phones get bigger type and full-bleed windows. */
   private applyLayout(sizes: Sizes) {
     this.root.classList.toggle('is-compact', sizes.compact);
     this.manager.setCompact(sizes.compact);
+  }
+
+  /** Screen-space coordinates for a pointer event, undoing the CSS3D scale. */
+  private localPoint(event: MouseEvent) {
+    const box = this.root.getBoundingClientRect();
+    const scale = box.width / (this.root.offsetWidth || 1) || 1;
+    return { x: (event.clientX - box.left) / scale, y: (event.clientY - box.top) / scale };
   }
 
   /* ---------------------------------------------------------------------- */
@@ -118,147 +172,306 @@ export class OS {
   /* ---------------------------------------------------------------------- */
 
   private buildStandby() {
-    const layer = document.createElement('div');
-    layer.className = 'layer layer--standby is-visible';
+    const layer = el('div', 'layer layer--standby is-visible');
+    layer.append(el('h1', 'standby__name', profile.name));
+    layer.append(el('p', 'standby__role', profile.role));
 
-    const name = document.createElement('h1');
-    name.className = 'standby__name';
-    name.textContent = profile.name;
-
-    const role = document.createElement('p');
-    role.className = 'standby__role';
-    role.textContent = profile.role;
-
-    const hint = document.createElement('p');
-    hint.className = 'standby__hint';
+    const hint = el('p', 'standby__hint');
     hint.innerHTML = 'PRESS ANY KEY TO BOOT<span class="caret"></span>';
-
-    layer.append(name, role, hint);
-    return layer;
-  }
-
-  private buildBoot() {
-    const layer = document.createElement('div');
-    layer.className = 'layer layer--boot';
+    layer.append(hint);
     return layer;
   }
 
   /* ---------------------------------------------------------------------- */
-  /* Desktop                                                                 */
+  /* Desktop icons                                                           */
   /* ---------------------------------------------------------------------- */
 
-  private buildDesktop() {
-    const layer = document.createElement('div');
-    layer.className = 'layer layer--desktop';
+  private renderIcons() {
+    this.iconGrid.replaceChildren();
 
-    const iconGrid = document.createElement('div');
-    iconGrid.className = 'icons';
+    for (const node of fs.list(DESKTOP_DIR)) {
+      const path = join(DESKTOP_DIR, node.name);
 
-    for (const app of apps) {
-      const button = document.createElement('button');
+      const button = el('button', 'icon');
       button.type = 'button';
-      button.className = 'icon';
-      button.dataset.app = app.id;
+      button.dataset.app = node.appId ?? '';
+      button.dataset.path = path;
+      button.classList.toggle('is-selected', this.selected === path);
 
-      const glyph = document.createElement('span');
-      glyph.className = 'icon__glyph';
-      glyph.innerHTML = app.icon;
+      const glyph = el('span', 'icon__glyph');
+      glyph.innerHTML = node.appId
+        ? appsById.get(node.appId)?.icon ?? fileIcon(node)
+        : fileIcon(node);
 
-      const label = document.createElement('span');
-      label.className = 'icon__label';
-      label.textContent = app.title;
+      button.append(glyph, el('span', 'icon__label', node.name));
 
-      button.append(glyph, label);
       button.addEventListener('click', () => {
-        this.audio.click();
-        this.closeStartMenu();
-        this.manager.open(app);
+        this.selected = path;
+        this.renderIcons();
       });
-      iconGrid.append(button);
+
+      // Double-click on a desktop, single tap on touch.
+      button.addEventListener('dblclick', () => this.launch(path));
+      button.addEventListener('pointerup', (event) => {
+        if (event.pointerType === 'touch') this.launch(path);
+      });
+
+      button.addEventListener('contextmenu', (event) => {
+        event.preventDefault();
+        this.selected = path;
+        this.renderIcons();
+        const point = this.localPoint(event);
+        this.iconMenu(path, point.x, point.y);
+      });
+
+      this.iconGrid.append(button);
     }
+  }
 
-    const windows = document.createElement('div');
-    windows.className = 'windows';
+  private launch(path: string) {
+    this.audio.click();
+    this.closeMenus();
+    openPath(path);
+  }
 
-    const startMenu = document.createElement('nav');
-    startMenu.className = 'start-menu';
+  private iconMenu(path: string, x: number, y: number) {
+    const node = fs.get(path);
+    if (!node) return;
 
-    const menuHead = document.createElement('div');
-    menuHead.className = 'start-menu__head';
-    const menuName = document.createElement('span');
-    menuName.className = 'start-menu__name';
-    menuName.textContent = profile.name;
-    const menuRole = document.createElement('span');
-    menuRole.className = 'start-menu__role';
-    menuRole.textContent = profile.role;
-    menuHead.append(menuName, menuRole);
-    startMenu.append(menuHead);
+    openContextMenu(this.root, x, y, [
+      { label: 'Open', action: () => this.launch(path) },
+      { separator: true },
+      {
+        label: 'Rename',
+        icon: MENU_ICONS.rename,
+        disabled: node.system,
+        action: () =>
+          askForName(this.root, 'Rename', node.name, (value) => {
+            if (!fs.rename(path, value)) notify('Could not rename', 'That name is taken.');
+          }),
+      },
+      {
+        label: 'Delete',
+        icon: MENU_ICONS.trash,
+        disabled: node.system,
+        action: () =>
+          confirmAction(this.root, 'Delete', 'Delete "' + node.name + '"?', () => {
+            if (fs.remove(path)) notify('Deleted', node.name);
+          }),
+      },
+    ]);
+  }
 
-    const menuList = document.createElement('div');
-    menuList.className = 'start-menu__list';
-    for (const app of apps) {
-      const item = document.createElement('button');
+  private bindDesktop() {
+    this.desktop.addEventListener('pointerdown', (event) => {
+      const target = event.target as HTMLElement;
+      if (!target.closest('.start-menu') && !target.closest('.taskbar__start')) {
+        this.startMenu.classList.remove('is-open');
+      }
+      if (!target.closest('.calendar') && !target.closest('.taskbar__clock')) {
+        this.calendar.classList.remove('is-open');
+      }
+      if (target === this.desktop || target === this.iconGrid) {
+        this.selected = null;
+        this.renderIcons();
+      }
+    });
+
+    this.desktop.addEventListener('contextmenu', (event) => {
+      const target = event.target as HTMLElement;
+      // Windows and icons carry their own menus.
+      if (target.closest('.win') || target.closest('.icon')) return;
+      event.preventDefault();
+
+      const point = this.localPoint(event);
+      openContextMenu(this.root, point.x, point.y, [
+        {
+          label: 'New folder',
+          icon: MENU_ICONS.newFolder,
+          action: () =>
+            askForName(this.root, 'New folder', fs.uniqueName(DESKTOP_DIR, 'New folder'), (value) => {
+              if (!fs.mkdir(join(DESKTOP_DIR, value))) notify('Could not create folder');
+            }),
+        },
+        {
+          label: 'New text file',
+          icon: MENU_ICONS.newFile,
+          action: () =>
+            askForName(
+              this.root,
+              'New file',
+              fs.uniqueName(DESKTOP_DIR, 'Untitled', '.txt'),
+              (value) => {
+                if (!fs.write(join(DESKTOP_DIR, value), '')) notify('Could not create file');
+              },
+            ),
+        },
+        { separator: true },
+        { label: 'Refresh', icon: MENU_ICONS.refresh, action: () => this.renderIcons() },
+        {
+          label: 'Display settings',
+          icon: icons.settings,
+          action: () => this.manager.open(appsById.get('settings')!),
+        },
+      ]);
+    });
+  }
+
+  /* ---------------------------------------------------------------------- */
+  /* Start menu                                                              */
+  /* ---------------------------------------------------------------------- */
+
+  private buildStartMenu() {
+    const menu = el('nav', 'start-menu');
+
+    const head = el('div', 'start-menu__head');
+    head.append(el('span', 'start-menu__name', profile.name));
+    head.append(el('span', 'start-menu__role', profile.role));
+    menu.append(head);
+
+    const searchRow = el('div', 'start-menu__search');
+    const glyph = el('span', 'start-menu__search-icon');
+    glyph.innerHTML = MENU_ICONS.search;
+
+    const search = el('input', 'start-menu__input');
+    search.type = 'text';
+    search.placeholder = 'Search apps and files';
+    search.spellcheck = false;
+
+    searchRow.append(glyph, search);
+    menu.append(searchRow);
+
+    const list = el('div', 'start-menu__list');
+    menu.append(list);
+
+    const power = el('button', 'start-menu__item start-menu__item--power');
+    power.type = 'button';
+    power.innerHTML = '<span class="start-menu__icon">' + MENU_ICONS.power + '</span>';
+    power.append(document.createTextNode('Close all windows'));
+    power.addEventListener('click', () => {
+      this.audio.click();
+      this.startMenu.classList.remove('is-open');
+      this.manager.closeAll();
+    });
+    menu.append(power);
+
+    search.addEventListener('input', () => this.renderStartList());
+    search.addEventListener('keydown', (event) => {
+      event.stopPropagation();
+      if (event.key === 'Escape') {
+        menu.classList.remove('is-open');
+        return;
+      }
+      if (event.key === 'Enter') {
+        (list.querySelector('.start-menu__item') as HTMLButtonElement | null)?.click();
+      }
+    });
+
+    return { menu, list, search };
+  }
+
+  private renderStartList() {
+    const query = this.search.value.trim().toLowerCase();
+    this.startList.replaceChildren();
+
+    const matched = query ? apps.filter((app) => app.title.toLowerCase().includes(query)) : apps;
+
+    for (const app of matched) {
+      const item = el('button', 'start-menu__item');
       item.type = 'button';
-      item.className = 'start-menu__item';
       item.innerHTML = '<span class="start-menu__icon">' + app.icon + '</span>';
       item.append(document.createTextNode(app.title));
       item.addEventListener('click', () => {
         this.audio.click();
-        this.closeStartMenu();
+        this.startMenu.classList.remove('is-open');
         this.manager.open(app);
       });
-      menuList.append(item);
+      this.startList.append(item);
     }
-    startMenu.append(menuList);
 
-    const shutdown = document.createElement('button');
-    shutdown.type = 'button';
-    shutdown.className = 'start-menu__item start-menu__item--power';
-    shutdown.innerHTML = '<span class="start-menu__icon">' + icons.terminal + '</span>';
-    shutdown.append(document.createTextNode('Close all windows'));
-    shutdown.addEventListener('click', () => {
-      this.audio.click();
-      this.closeStartMenu();
-      this.manager.closeAll();
-    });
-    startMenu.append(shutdown);
+    if (!query) return;
 
-    const taskbar = document.createElement('footer');
-    taskbar.className = 'taskbar';
+    // Files matching the query, listed below the apps.
+    const files = fs.find(query, HOME).slice(0, 8);
+    if (files.length) this.startList.append(el('div', 'start-menu__label', 'Files'));
 
-    const startButton = document.createElement('button');
-    startButton.type = 'button';
-    startButton.className = 'taskbar__start';
-    startButton.innerHTML = '<span class="taskbar__logo"></span>';
-    startButton.append(document.createTextNode('Start'));
-    startButton.addEventListener('click', (event) => {
-      event.stopPropagation();
-      this.audio.click();
-      this.startMenu.classList.toggle('is-open');
-    });
+    for (const path of files) {
+      const node = fs.get(path);
+      if (!node) continue;
 
-    const taskbarApps = document.createElement('div');
-    taskbarApps.className = 'taskbar__apps';
+      const item = el('button', 'start-menu__item');
+      item.type = 'button';
+      item.innerHTML = '<span class="start-menu__icon">' + fileIcon(node) + '</span>';
+      item.append(document.createTextNode(basename(path)));
+      item.title = path;
+      item.addEventListener('click', () => {
+        this.startMenu.classList.remove('is-open');
+        this.launch(path);
+      });
+      this.startList.append(item);
+    }
 
-    const clock = document.createElement('div');
-    clock.className = 'taskbar__clock';
-
-    taskbar.append(startButton, taskbarApps, clock);
-
-    layer.append(iconGrid, windows, startMenu, taskbar);
-
-    layer.addEventListener('pointerdown', (event) => {
-      const target = event.target as HTMLElement;
-      if (!target.closest('.start-menu') && !target.closest('.taskbar__start')) {
-        this.closeStartMenu();
-      }
-    });
-
-    return layer;
+    if (!matched.length && !files.length) {
+      this.startList.append(el('p', 'start-menu__empty', 'Nothing matches "' + query + '".'));
+    }
   }
 
-  private closeStartMenu() {
-    this.startMenu.classList.remove('is-open');
+  private toggleStart() {
+    const open = this.startMenu.classList.toggle('is-open');
+    this.calendar.classList.remove('is-open');
+    if (open) {
+      this.search.value = '';
+      this.renderStartList();
+      window.setTimeout(() => this.search.focus(), 60);
+    }
+  }
+
+  /* ---------------------------------------------------------------------- */
+  /* Taskbar                                                                 */
+  /* ---------------------------------------------------------------------- */
+
+  private buildTaskbar() {
+    const taskbar = el('footer', 'taskbar');
+
+    const start = el('button', 'taskbar__start');
+    start.type = 'button';
+    start.innerHTML = '<span class="taskbar__logo"></span>';
+    start.append(document.createTextNode('Start'));
+    start.addEventListener('click', (event) => {
+      event.stopPropagation();
+      this.audio.click();
+      this.toggleStart();
+    });
+
+    const appsHost = el('div', 'taskbar__apps');
+
+    const tray = el('div', 'taskbar__tray');
+    const sound = el('button', 'taskbar__tray-button');
+    sound.type = 'button';
+    sound.title = 'Sound';
+    sound.innerHTML = MENU_ICONS.sound;
+    sound.addEventListener('click', () => {
+      this.audio.unlock();
+      this.audio.toggleMute();
+    });
+    this.audio.setOnChange((muted) => sound.classList.toggle('is-off', muted));
+    tray.append(sound);
+
+    const clock = el('button', 'taskbar__clock');
+    clock.type = 'button';
+    clock.addEventListener('click', (event) => {
+      event.stopPropagation();
+      this.audio.click();
+      this.startMenu.classList.remove('is-open');
+      this.renderCalendar();
+      this.calendar.classList.toggle('is-open');
+    });
+
+    taskbar.append(start, appsHost, tray, clock);
+
+    const calendar = el('div', 'calendar');
+
+    return { taskbar, appsHost, clock, calendar };
   }
 
   private syncTaskbar() {
@@ -268,9 +481,8 @@ export class OS {
     for (const app of apps) {
       if (!this.manager.isOpen(app.id)) continue;
 
-      const button = document.createElement('button');
+      const button = el('button', 'taskbar__app');
       button.type = 'button';
-      button.className = 'taskbar__app';
       button.classList.toggle('is-active', focused === app.id);
       button.classList.toggle('is-minimised', this.manager.isMinimised(app.id));
       button.innerHTML = '<span class="taskbar__icon">' + app.icon + '</span>';
@@ -287,14 +499,89 @@ export class OS {
     this.clock.textContent = new Date().toLocaleTimeString([], {
       hour: '2-digit',
       minute: '2-digit',
+      hour12: !settings.state.clock24,
     });
   };
+
+  private renderCalendar() {
+    const now = new Date();
+    this.calendar.replaceChildren();
+
+    this.calendar.append(
+      el('div', 'calendar__month', now.toLocaleDateString([], { month: 'long', year: 'numeric' })),
+    );
+
+    const grid = el('div', 'calendar__grid');
+    for (const day of ['M', 'T', 'W', 'T', 'F', 'S', 'S']) {
+      grid.append(el('span', 'calendar__dow', day));
+    }
+
+    const first = new Date(now.getFullYear(), now.getMonth(), 1);
+    // Monday-first offset.
+    const offset = (first.getDay() + 6) % 7;
+    const days = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+
+    for (let i = 0; i < offset; i += 1) grid.append(el('span', 'calendar__day is-blank'));
+    for (let day = 1; day <= days; day += 1) {
+      const cell = el('span', 'calendar__day', String(day));
+      if (day === now.getDate()) cell.classList.add('is-today');
+      grid.append(cell);
+    }
+
+    this.calendar.append(grid);
+    this.calendar.append(
+      el(
+        'div',
+        'calendar__full',
+        now.toLocaleDateString([], { weekday: 'long', day: 'numeric', month: 'long' }),
+      ),
+    );
+  }
+
+  private closeMenus() {
+    closeContextMenu();
+    this.startMenu.classList.remove('is-open');
+    this.calendar.classList.remove('is-open');
+  }
+
+  /* ---------------------------------------------------------------------- */
+  /* Shortcuts                                                               */
+  /* ---------------------------------------------------------------------- */
+
+  private bindShortcuts() {
+    this.root.addEventListener('keydown', (event) => {
+      if (this.state !== 'desktop') return;
+      const focused = this.manager.focusedId;
+
+      if (event.key === 'Tab' && event.altKey) {
+        event.preventDefault();
+        this.manager.cycle();
+        return;
+      }
+
+      if (event.key.toLowerCase() === 'w' && (event.ctrlKey || event.metaKey)) {
+        event.preventDefault();
+        if (focused) this.manager.close(focused);
+        return;
+      }
+
+      if (event.key === 'Escape') {
+        this.closeMenus();
+        return;
+      }
+
+      if (focused && event.altKey) {
+        if (event.key === 'ArrowLeft') return this.manager.snap(focused, 'left');
+        if (event.key === 'ArrowRight') return this.manager.snap(focused, 'right');
+        if (event.key === 'ArrowUp') return this.manager.snap(focused, 'top');
+      }
+    });
+  }
 
   /* ---------------------------------------------------------------------- */
   /* Lifecycle                                                               */
   /* ---------------------------------------------------------------------- */
 
-  /** Runs the POST sequence, then hands over to the desktop. */
   powerOn() {
     if (this.state !== 'standby') return;
     this.state = 'booting';
@@ -310,8 +597,7 @@ export class OS {
       elapsed += entry.delay;
       this.timers.push(
         window.setTimeout(() => {
-          const line = document.createElement('div');
-          line.className = 'boot__line' + (entry.className ? ' ' + entry.className : '');
+          const line = el('div', 'boot__line' + (entry.className ? ' ' + entry.className : ''));
           line.textContent = entry.text === '' ? ' ' : entry.text;
           this.boot.append(line);
           if (entry.ram) this.countRam(line);
@@ -320,7 +606,6 @@ export class OS {
       );
     }
 
-    // A beat on the last line, then the CRT "snaps" into the desktop.
     this.timers.push(
       window.setTimeout(() => this.root.classList.add('is-switching'), elapsed + 420),
     );
@@ -339,6 +624,7 @@ export class OS {
 
         // Open with something to read rather than a bare desktop.
         this.manager.open(appsById.get('about')!);
+        notify('Welcome', 'Right-click the desktop, or open the Terminal.');
       }, elapsed + 620),
     );
   }
@@ -346,26 +632,25 @@ export class OS {
   /** The classic POST memory count, ticking up in place. */
   private countRam(line: HTMLElement) {
     let value = 0;
-    const step = 4096;
     this.ramTimer = window.setInterval(() => {
-      value = Math.min(value + step, RAM_TOTAL);
+      value = Math.min(value + 4096, RAM_TOTAL);
       line.textContent = 'Memory Test : ' + value + 'K OK';
       if (value >= RAM_TOTAL) window.clearInterval(this.ramTimer);
     }, 45);
   }
 
+  setInteractive(interactive: boolean) {
+    this.root.classList.toggle('is-interactive', interactive);
+    if (!interactive) this.closeMenus();
+  }
+
   /**
-   * Fullscreen mode for phones: the screen stops being a fixed 1280x960
-   * surface projected onto glass and becomes a normal viewport-sized element,
-   * so text renders at true 1:1 pixels instead of being scaled into a stamp.
+   * Fullscreen mode for phones: the screen stops being a fixed 1280x960 surface
+   * projected onto glass and becomes a normal viewport-sized element, so text
+   * renders at true 1:1 pixels instead of being scaled into a stamp.
    */
   setOverlay(on: boolean) {
     this.root.classList.toggle('is-overlay', on);
-  }
-
-  /** Pointer events only reach the screen once the camera has settled on it. */
-  setInteractive(interactive: boolean) {
-    this.root.classList.toggle('is-interactive', interactive);
   }
 
   destroy() {

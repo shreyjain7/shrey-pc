@@ -13,9 +13,7 @@ Live: _(add your deployment URL here)_
   headphones, mug, pen cup, sticky notes, cabling, a shelf with books and a
   plant, framed prints, a shuttered window onto a night skyline, a rug, and dust
   drifting through the lamp light.
-- **A real OS on the glass.** Draggable, minimisable, maximisable windows; a
-  taskbar with a live clock; a start menu; a printable résumé sheet; and a
-  working terminal (`help`, `whoami`, `neofetch`, `open resume`, `sudo`…).
+- **A real OS on the glass** — not a set of static panels. See below.
 - **A BIOS boot** with a memory count that ticks up in place, drive detection,
   and a CRT "snap" into the desktop.
 - **Sound**, synthesised at runtime — mains hum and flyback whine from the tube,
@@ -24,6 +22,47 @@ Live: _(add your deployment URL here)_
 - **Free look.** Drag or use the arrow keys to orbit the desk; a reset button
   swings you back.
 - **Corner controls**: sound, reset view, fullscreen.
+
+## shrey-os
+
+The screen runs a small desktop environment on top of a **virtual filesystem**
+that persists to `localStorage`. Everything is connected: a file created in the
+terminal appears on the desktop, a file renamed on the desktop is visible to
+`ls`, and a document saved in the editor can be `cat`-ed back.
+
+- **Filesystem** — real paths under `/home/shrey`, with directories, text files,
+  app launchers and links. The CV is seeded onto the disk as readable files, so
+  `cat ~/Documents/projects.txt` works. System files are write-protected and
+  re-seeded from `src/data/cv.ts` on every boot; anything you create is yours
+  and survives a reload.
+- **Shell** — a genuine interpreter over that filesystem: `ls`, `cd`, `pwd`,
+  `cat`, `mkdir`, `touch`, `rm`, `mv`, `cp`, `echo >` / `>>`, `tree`, `find`,
+  `grep`, `open`, `edit`, `df`, `history`, `neofetch`, `uname`, `whoami`,
+  `sudo`, `clear`. Tab completion over both commands and filenames, plus
+  command history on the arrow keys.
+- **Files** — a file manager with back/forward/up history, breadcrumbs,
+  selection, new folder and file, rename (F2), delete (Del) and context menus.
+- **Notepad** — opens any text file, edits it, saves with Ctrl+S or Save as,
+  tracks a dirty marker and a live line/word/character count. System files open
+  read-only.
+- **Paint** — a raster editor with a palette, brush sizes and an eraser; saves a
+  PNG into `~/Pictures`, and reopens it later.
+- **Minesweeper** — three difficulties, flags, chording, a timer, and a first
+  click that is always safe.
+- **Calculator** — four functions, percent and sign, mouse or keyboard.
+- **Settings** — five wallpapers and five accent colours applied live as CSS
+  custom properties, toggles for scanlines, flicker, key clicks and a 24-hour
+  clock, storage usage, and buttons to reset the disk or your preferences.
+  Everything persists.
+- **The shell around it** — draggable *and resizable* windows (eight grips),
+  minimise / maximise / close, snapping (Alt+←/→/↑), Alt+Tab, Ctrl+W, a taskbar
+  with running apps and a system tray, a clock that opens a calendar, a start
+  menu with search across both apps and files, right-click context menus on the
+  desktop and on every icon, in-CRT dialogs, and toast notifications.
+
+The CV still has its own windows — About, Projects, Experience, Skills,
+Education, Achievements, Contact and a printable résumé sheet — reachable from
+the start menu.
 
 ## Built for phones, not just shrunk
 
@@ -121,7 +160,11 @@ src/
   world/                layout constants, geometry and texture helpers, Room,
                         Desk, Monitor (CRT + CSS3D screen), Peripherals, Dust,
                         World (staged build)
-  os/                   OS shell, WindowManager, apps, Terminal, screen.css
+  os/                   fs.ts (virtual filesystem), settings.ts, system.ts,
+                        OS shell, WindowManager, Terminal (the shell),
+                        ContextMenu, Notifications, ui helpers,
+                        apps/ (Explorer, Notepad, Paint, Minesweeper,
+                        Calculator, Settings), screen.css + desktop.css
   style.css             page chrome: loader, overlay UI, render-layer stacking
 ```
 

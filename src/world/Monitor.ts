@@ -159,7 +159,7 @@ export class Monitor {
       new MeshPhysicalMaterial({
         color: 0x8ea8c8,
         transparent: true,
-        opacity: 0.055,
+        opacity: 0.04,
         roughness: 0.08,
         metalness: 0,
         depthWrite: false,
@@ -175,7 +175,7 @@ export class Monitor {
       new MeshBasicMaterial({
         color: 0x000000,
         transparent: true,
-        opacity: 0.6,
+        opacity: 0.42,
         alphaMap: vignetteTexture(),
         depthWrite: false,
       }),
@@ -190,7 +190,7 @@ export class Monitor {
         new MeshBasicMaterial({
           map: smudgeTexture(),
           transparent: true,
-          opacity: 0.16,
+          opacity: 0.06,
           blending: AdditiveBlending,
           depthWrite: false,
         }),

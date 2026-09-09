@@ -10,6 +10,12 @@ import {
   type Entry,
 } from '../data/cv';
 import { createTerminal } from './Terminal';
+import { createExplorer } from './apps/Explorer';
+import { createNotepad } from './apps/Notepad';
+import { createCalculator } from './apps/Calculator';
+import { createMinesweeper } from './apps/Minesweeper';
+import { createPaint } from './apps/Paint';
+import { createSettings } from './apps/SettingsApp';
 import type { AppDefinition } from './WindowManager';
 
 /* -------------------------------------------------------------------------- */
@@ -49,6 +55,12 @@ export const icons = {
     '<rect x="3" y="5.5" width="18" height="13" rx="2"/><path d="m3.6 7 8.4 6 8.4-6"/>',
   ),
   terminal: svg('<rect x="3" y="4.5" width="18" height="15" rx="2"/><path d="m7.5 10 2.6 2.2-2.6 2.2"/><path d="M13 14.6h3.6"/>'),
+  explorer: svg('<path d="M3 7.4A1.4 1.4 0 0 1 4.4 6h4.2l1.9 2.2h9.1A1.4 1.4 0 0 1 21 9.6v8A1.4 1.4 0 0 1 19.6 19H4.4A1.4 1.4 0 0 1 3 17.6z"/>'),
+  notepad: svg('<path d="M4 20h16"/><path d="M14.5 4.5 19 9 9 19H4.5v-4.5z"/>'),
+  calculator: svg('<rect x="5" y="3" width="14" height="18" rx="2"/><path d="M8.5 7.5h7"/><path d="M9 12h.01M12 12h.01M15 12h.01M9 16h.01M12 16h.01M15 16h.01"/>'),
+  minesweeper: svg('<circle cx="12" cy="13" r="5.6"/><path d="M12 4v2.4M4.8 7.2l1.9 1.9M19.2 7.2l-1.9 1.9"/>'),
+  paint: svg('<circle cx="12" cy="12" r="8.5"/><circle cx="9.4" cy="9.8" r="1.1" fill="currentColor"/><circle cx="14.6" cy="9.8" r="1.1" fill="currentColor"/><circle cx="15.6" cy="14.2" r="1.1" fill="currentColor"/>'),
+  settings: svg('<circle cx="12" cy="12" r="3"/><path d="M19.4 14.5a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-2.7 1.1v.3a2 2 0 1 1-4 0v-.2a1.6 1.6 0 0 0-2.8-1.1l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0-1.1-2.7H3a2 2 0 1 1 0-4h.2a1.6 1.6 0 0 0 1.1-2.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.6 1.6 0 0 0 2.7-1.1V3a2 2 0 1 1 4 0v.2a1.6 1.6 0 0 0 2.8 1.1l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0 1.1 2.7h.3a2 2 0 1 1 0 4h-.2a1.6 1.6 0 0 0-1.5 1z"/>'),
 };
 
 /* -------------------------------------------------------------------------- */
@@ -322,9 +334,57 @@ export const apps: AppDefinition[] = [
     id: 'terminal',
     title: 'Terminal',
     icon: icons.terminal,
-    width: 680,
-    height: 460,
+    width: 700,
+    height: 480,
     render: createTerminal,
+  },
+  {
+    id: 'explorer',
+    title: 'Files',
+    icon: icons.explorer,
+    width: 720,
+    height: 520,
+    render: createExplorer,
+  },
+  {
+    id: 'notepad',
+    title: 'Notepad',
+    icon: icons.notepad,
+    width: 660,
+    height: 500,
+    render: createNotepad,
+  },
+  {
+    id: 'calculator',
+    title: 'Calculator',
+    icon: icons.calculator,
+    width: 320,
+    height: 460,
+    render: createCalculator,
+  },
+  {
+    id: 'minesweeper',
+    title: 'Minesweeper',
+    icon: icons.minesweeper,
+    width: 520,
+    height: 520,
+    render: createMinesweeper,
+  },
+  {
+    id: 'paint',
+    title: 'Paint',
+    icon: icons.paint,
+    width: 600,
+    height: 500,
+    render: createPaint,
+  },
+  {
+    id: 'settings',
+    title: 'Settings',
+    icon: icons.settings,
+    width: 660,
+    height: 560,
+    render: createSettings,
   },
 ];
 

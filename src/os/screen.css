@@ -16,6 +16,8 @@
   --dim: #8c9bb0;
   --faint: #64738a;
   --accent: #5fd0ff;
+  --accent-soft: rgba(95, 208, 255, 0.13);
+  --accent-line: rgba(95, 208, 255, 0.4);
   --accent-warm: #ffb454;
   --good: #7ee08a;
 
@@ -79,8 +81,8 @@
 
 .crt__vignette {
   background:
-    radial-gradient(120% 110% at 50% 50%, transparent 52%, rgba(0, 0, 0, 0.55) 100%),
-    linear-gradient(to bottom, rgba(255, 255, 255, 0.04), transparent 22%);
+    radial-gradient(125% 115% at 50% 50%, transparent 60%, rgba(0, 0, 0, 0.42) 100%),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.025), transparent 22%);
 }
 
 .crt__flicker {
@@ -247,10 +249,22 @@
 /* --- Desktop ------------------------------------------------------------ */
 
 .layer--desktop {
-  background:
-    radial-gradient(115% 90% at 78% 8%, rgba(95, 208, 255, 0.09), transparent 58%),
-    radial-gradient(95% 80% at 12% 96%, rgba(255, 180, 84, 0.07), transparent 60%),
-    linear-gradient(160deg, var(--bg-far), var(--bg) 62%);
+  /* Set from Settings; the fallback matches the shipped default. */
+  background: var(
+    --wallpaper,
+    radial-gradient(115% 90% at 78% 8%, rgba(95, 208, 255, 0.09), transparent 58%)
+      radial-gradient(95% 80% at 12% 96%, rgba(255, 180, 84, 0.07), transparent 60%)
+      linear-gradient(160deg, var(--bg-far), var(--bg) 62%)
+  );
+}
+
+.screen.no-scanlines .crt__scanlines {
+  display: none;
+}
+
+.screen.no-flicker .crt__flicker {
+  animation: none;
+  opacity: 0;
 }
 
 .icons {

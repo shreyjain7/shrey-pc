@@ -1,4 +1,5 @@
 @import './os/screen.css';
+@import './os/desktop.css';
 
 /* =========================================================================
    Page chrome: the two render layers, the loader, and the screen-space UI.

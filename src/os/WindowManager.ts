@@ -12,6 +12,8 @@ export interface AppDefinition {
 interface ManagedWindow {
   app: AppDefinition;
   root: HTMLElement;
+  /** The app's own element, so it can be told when its window goes away. */
+  content: HTMLElement;
   minimised: boolean;
   maximised: boolean;
   /** Geometry remembered while maximised, so restore puts it back. */
@@ -153,14 +155,26 @@ export class WindowManager {
 
     const body = document.createElement('div');
     body.className = 'win__body';
-    body.append(app.render());
+    const content = app.render();
+    body.append(content);
 
-    root.append(bar, body);
+    // Eight grips: four edges and four corners.
+    const grips = document.createElement('div');
+    grips.className = 'win__grips';
+    for (const side of ['n', 's', 'e', 'w', 'ne', 'nw', 'se', 'sw']) {
+      const grip = document.createElement('div');
+      grip.className = 'win__grip win__grip--' + side;
+      grip.dataset.side = side;
+      grips.append(grip);
+    }
+
+    root.append(bar, body, grips);
     this.layer.append(root);
 
     const entry: ManagedWindow = {
       app,
       root,
+      content,
       minimised: false,
       maximised: false,
       restore: null,
@@ -171,6 +185,7 @@ export class WindowManager {
     root.addEventListener('pointerdown', () => this.focus(app.id));
     bar.addEventListener('dblclick', () => this.toggleMaximise(app.id));
     this.makeDraggable(entry, bar);
+    if (!this.compact) this.makeResizable(entry, grips);
 
     // Let the opening animation start from a clean frame.
     requestAnimationFrame(() => root.classList.add('is-open'));
@@ -247,6 +262,111 @@ export class WindowManager {
     handle.addEventListener('pointercancel', end);
   }
 
+  /** Drag a grip to resize, clamped to a usable minimum and the screen box. */
+  private makeResizable(entry: ManagedWindow, grips: HTMLElement) {
+    const MIN_W = 280;
+    const MIN_H = 180;
+
+    for (const grip of Array.from(grips.children) as HTMLElement[]) {
+      let pointerId: number | null = null;
+      let side = '';
+      let startX = 0;
+      let startY = 0;
+      let start = { x: 0, y: 0, w: 0, h: 0 };
+      let scale = 1;
+
+      grip.addEventListener('pointerdown', (event) => {
+        if (event.button !== 0 || entry.maximised) return;
+        event.stopPropagation();
+        pointerId = event.pointerId;
+        side = grip.dataset.side ?? '';
+        startX = event.clientX;
+        startY = event.clientY;
+        start = {
+          x: entry.root.offsetLeft,
+          y: entry.root.offsetTop,
+          w: entry.root.offsetWidth,
+          h: entry.root.offsetHeight,
+        };
+        scale = this.currentScale();
+        grip.setPointerCapture(event.pointerId);
+        entry.root.classList.add('is-dragging');
+        this.focus(entry.app.id);
+      });
+
+      grip.addEventListener('pointermove', (event) => {
+        if (pointerId !== event.pointerId) return;
+        const dx = (event.clientX - startX) / scale;
+        const dy = (event.clientY - startY) / scale;
+        const box = this.box;
+
+        let { x, y, w, h } = start;
+
+        if (side.includes('e')) w = Math.min(Math.max(start.w + dx, MIN_W), box.width - x);
+        if (side.includes('s')) h = Math.min(Math.max(start.h + dy, MIN_H), box.height - TASKBAR_HEIGHT - y);
+        if (side.includes('w')) {
+          // Dragging the left edge moves the origin as well as the width.
+          const width = Math.min(Math.max(start.w - dx, MIN_W), start.x + start.w);
+          x = start.x + start.w - width;
+          w = width;
+        }
+        if (side.includes('n')) {
+          const height = Math.min(Math.max(start.h - dy, MIN_H), start.y + start.h);
+          y = start.y + start.h - height;
+          h = height;
+        }
+
+        entry.root.style.left = Math.round(x) + 'px';
+        entry.root.style.top = Math.round(y) + 'px';
+        entry.root.style.width = Math.round(w) + 'px';
+        entry.root.style.height = Math.round(h) + 'px';
+      });
+
+      const end = (event: PointerEvent) => {
+        if (pointerId !== event.pointerId) return;
+        pointerId = null;
+        grip.releasePointerCapture(event.pointerId);
+        entry.root.classList.remove('is-dragging');
+      };
+
+      grip.addEventListener('pointerup', end);
+      grip.addEventListener('pointercancel', end);
+    }
+  }
+
+  /** Half-screen and full-screen snapping, by edge or by keyboard. */
+  snap(id: string, edge: 'left' | 'right' | 'top') {
+    const entry = this.windows.get(id);
+    if (!entry || this.compact) return;
+
+    const box = this.box;
+    const height = box.height - TASKBAR_HEIGHT;
+
+    if (edge === 'top') {
+      if (!entry.maximised) this.toggleMaximise(id);
+      return;
+    }
+
+    if (entry.maximised) this.toggleMaximise(id);
+    entry.root.style.top = '0px';
+    entry.root.style.left = (edge === 'left' ? 0 : Math.round(box.width / 2)) + 'px';
+    entry.root.style.width = Math.round(box.width / 2) + 'px';
+    entry.root.style.height = height + 'px';
+    this.focus(id);
+  }
+
+  /** Alt+Tab: bring the least recently focused visible window forward. */
+  cycle() {
+    const visible = this.order.filter((id) => !this.windows.get(id)?.minimised);
+    if (visible.length < 2) return;
+    this.focus(visible[0]);
+  }
+
+  focusedApp() {
+    const id = this.focusedId;
+    return id ? this.windows.get(id)?.app ?? null : null;
+  }
+
   focus(id: string) {
     if (!this.windows.has(id)) return;
     this.order = this.order.filter((entry) => entry !== id);
@@ -318,6 +438,8 @@ export class WindowManager {
     this.windows.delete(id);
     this.order = this.order.filter((entryId) => entryId !== id);
 
+    // Let the app tear down timers and listeners before the DOM goes.
+    entry.content.dispatchEvent(new CustomEvent('app:destroy'));
     window.setTimeout(() => entry.root.remove(), 180);
 
     const next = this.focusedId;

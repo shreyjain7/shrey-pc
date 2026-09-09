@@ -1,0 +1,261 @@
+import {
+  BoxGeometry,
+  CylinderGeometry,
+  Group,
+  InstancedMesh,
+  Matrix4,
+  Mesh,
+  MeshBasicMaterial,
+  MeshStandardMaterial,
+  Object3D,
+  SphereGeometry,
+  SpotLight,
+  TorusGeometry,
+} from 'three';
+import { roundedSlab } from './geometry';
+import { DESK, MONITOR } from './layout';
+
+/** Everything else on and around the desk. Set dressing, but it sells the room. */
+export class Peripherals {
+  readonly group = new Group();
+  readonly deskLamp: SpotLight;
+
+  private readonly plastic = new MeshStandardMaterial({
+    color: 0xb9b3a4,
+    roughness: 0.72,
+    metalness: 0.02,
+  });
+
+  private readonly darkPlastic = new MeshStandardMaterial({
+    color: 0x26262b,
+    roughness: 0.55,
+    metalness: 0.08,
+  });
+
+  private readonly caseFront = new MeshStandardMaterial({
+    color: 0x3c3f47,
+    roughness: 0.62,
+    metalness: 0.1,
+  });
+
+  private readonly metal = new MeshStandardMaterial({
+    color: 0x3a3a42,
+    roughness: 0.35,
+    metalness: 0.85,
+  });
+
+  constructor() {
+    this.group.add(this.buildKeyboard());
+    this.group.add(this.buildMouse());
+    this.group.add(this.buildTower());
+    this.group.add(this.buildMug());
+    this.group.add(this.buildBooks());
+
+    const lamp = this.buildLamp();
+    this.deskLamp = lamp.light;
+    this.group.add(lamp.group);
+  }
+
+  private buildKeyboard() {
+    const group = new Group();
+    const width = 0.44;
+    const depth = 0.155;
+
+    const base = new Mesh(
+      roundedSlab(width, depth, 0.008, { depth: 0.018, bevel: 0.003 }),
+      this.plastic,
+    );
+    base.rotation.x = -Math.PI / 2;
+    base.castShadow = true;
+    base.receiveShadow = true;
+    group.add(base);
+
+    // Keycaps as one instanced mesh — 75 draw calls collapsed into one.
+    const columns = 15;
+    const rows = 5;
+    const keySize = 0.023;
+    const gap = 0.0045;
+    const keys = new InstancedMesh(
+      new BoxGeometry(keySize, 0.007, keySize),
+      new MeshStandardMaterial({ color: 0x33333a, roughness: 0.85 }),
+      columns * rows,
+    );
+    keys.castShadow = true;
+
+    const dummy = new Object3D();
+    const matrix = new Matrix4();
+    const spanX = columns * (keySize + gap) - gap;
+    const spanZ = rows * (keySize + gap) - gap;
+
+    let index = 0;
+    for (let row = 0; row < rows; row += 1) {
+      for (let column = 0; column < columns; column += 1) {
+        dummy.position.set(
+          -spanX / 2 + keySize / 2 + column * (keySize + gap),
+          0.012,
+          -spanZ / 2 + keySize / 2 + row * (keySize + gap),
+        );
+        dummy.updateMatrix();
+        matrix.copy(dummy.matrix);
+        keys.setMatrixAt(index, matrix);
+        index += 1;
+      }
+    }
+    keys.instanceMatrix.needsUpdate = true;
+    group.add(keys);
+
+    group.position.set(-0.02, DESK.top, MONITOR.frontZ + 0.24);
+    // A couple of degrees of tilt, like feet-up on a real board.
+    group.rotation.x = -0.045;
+    group.rotation.y = 0.04;
+    return group;
+  }
+
+  private buildMouse() {
+    const group = new Group();
+
+    const shell = new Mesh(new SphereGeometry(0.032, 20, 14), this.plastic);
+    shell.scale.set(0.72, 0.5, 1);
+    shell.castShadow = true;
+    group.add(shell);
+
+    const split = new Mesh(new BoxGeometry(0.0015, 0.004, 0.03), this.darkPlastic);
+    split.position.set(0, 0.0155, -0.016);
+    group.add(split);
+
+    group.position.set(0.31, DESK.top + 0.014, MONITOR.frontZ + 0.245);
+    group.rotation.y = -0.16;
+    return group;
+  }
+
+  private buildTower() {
+    const group = new Group();
+
+    const body = new Mesh(new BoxGeometry(0.19, 0.42, 0.44), this.darkPlastic);
+    body.position.y = 0.21;
+    body.castShadow = true;
+    body.receiveShadow = true;
+    group.add(body);
+
+    const face = new Mesh(new BoxGeometry(0.192, 0.2, 0.006), this.caseFront);
+    face.position.set(0, 0.32, 0.221);
+    group.add(face);
+
+    const slot = new Mesh(new BoxGeometry(0.13, 0.012, 0.004), this.darkPlastic);
+    slot.position.set(0, 0.35, 0.226);
+    group.add(slot);
+
+    const powerLight = new Mesh(
+      new SphereGeometry(0.005, 10, 8),
+      new MeshBasicMaterial({ color: 0x4fd1ff }),
+    );
+    powerLight.position.set(0.06, 0.27, 0.226);
+    group.add(powerLight);
+
+    group.position.set(-0.9, 0, -0.5);
+    group.rotation.y = 0.14;
+    return group;
+  }
+
+  private buildMug() {
+    const group = new Group();
+    const ceramic = new MeshStandardMaterial({ color: 0x9c3b34, roughness: 0.35 });
+
+    const body = new Mesh(new CylinderGeometry(0.041, 0.036, 0.095, 24), ceramic);
+    body.position.y = 0.0475;
+    body.castShadow = true;
+    group.add(body);
+
+    const coffee = new Mesh(
+      new CylinderGeometry(0.037, 0.037, 0.002, 24),
+      new MeshStandardMaterial({ color: 0x2a1508, roughness: 0.2 }),
+    );
+    coffee.position.y = 0.082;
+    group.add(coffee);
+
+    const handle = new Mesh(new TorusGeometry(0.026, 0.007, 10, 22, Math.PI * 1.2), ceramic);
+    handle.position.set(0.045, 0.05, 0);
+    handle.rotation.z = -Math.PI / 2.6;
+    handle.castShadow = true;
+    group.add(handle);
+
+    group.position.set(0.46, DESK.top, MONITOR.frontZ + 0.06);
+    return group;
+  }
+
+  private buildBooks() {
+    const group = new Group();
+    const covers = [0x35505f, 0x4a3444, 0x3d4a52];
+
+    covers.forEach((color, index) => {
+      const book = new Mesh(
+        new BoxGeometry(0.17 - index * 0.008, 0.026, 0.235 - index * 0.01),
+        new MeshStandardMaterial({ color, roughness: 0.85 }),
+      );
+      book.position.set(0, 0.013 + index * 0.026, 0);
+      book.rotation.y = index * 0.06 - 0.06;
+      book.castShadow = true;
+      book.receiveShadow = true;
+      group.add(book);
+    });
+
+    group.position.set(-0.52, DESK.top, MONITOR.frontZ + 0.02);
+    group.rotation.y = 0.22;
+    return group;
+  }
+
+  private buildLamp() {
+    const group = new Group();
+
+    const base = new Mesh(new CylinderGeometry(0.062, 0.068, 0.014, 24), this.metal);
+    base.position.y = 0.007;
+    base.castShadow = true;
+    group.add(base);
+
+    const stem = new Mesh(new CylinderGeometry(0.008, 0.008, 0.34, 14), this.metal);
+    stem.position.y = 0.18;
+    stem.castShadow = true;
+    group.add(stem);
+
+    const arm = new Mesh(new CylinderGeometry(0.007, 0.007, 0.2, 14), this.metal);
+    arm.position.set(0.07, 0.345, 0.03);
+    arm.rotation.z = Math.PI / 2.3;
+    arm.rotation.y = -0.35;
+    arm.castShadow = true;
+    group.add(arm);
+
+    const shade = new Mesh(
+      new CylinderGeometry(0.038, 0.062, 0.07, 22, 1, true),
+      new MeshStandardMaterial({
+        color: 0x2f3238,
+        roughness: 0.5,
+        metalness: 0.6,
+        side: 2,
+      }),
+    );
+    shade.position.set(0.16, 0.315, 0.06);
+    shade.rotation.z = 0.55;
+    shade.rotation.x = -0.25;
+    shade.castShadow = true;
+    group.add(shade);
+
+    const bulb = new Mesh(
+      new SphereGeometry(0.02, 12, 10),
+      new MeshBasicMaterial({ color: 0xffd9a0 }),
+    );
+    bulb.position.set(0.175, 0.295, 0.07);
+    group.add(bulb);
+
+    const light = new SpotLight(0xffc98a, 3.6, 2.4, Math.PI / 4, 0.7, 1.3);
+    light.position.set(0.175, 0.295, 0.07);
+    // Aimed at the desk surface beside the books, not down at the floor.
+    light.target.position.set(0.29, 0, 0.28);
+    light.castShadow = true;
+    light.shadow.mapSize.set(1024, 1024);
+    light.shadow.bias = -0.0015;
+    group.add(light, light.target);
+
+    group.position.set(-0.74, DESK.top, MONITOR.frontZ - 0.16);
+    return { group, light };
+  }
+}

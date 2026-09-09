@@ -1,0 +1,313 @@
+@import './os/screen.css';
+
+/* =========================================================================
+   Page chrome: the two render layers, the loader, and the screen-space UI.
+   ========================================================================= */
+
+:root {
+  --ui-text: #dbe4f2;
+  --ui-dim: #8b9aae;
+  --ui-accent: #5fd0ff;
+  --ui-mono: ui-monospace, 'Cascadia Mono', 'SF Mono', Menlo, Consolas, monospace;
+  color-scheme: dark;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html,
+body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: #05070a;
+}
+
+body {
+  font-family: var(--ui-mono);
+  color: var(--ui-text);
+  -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* --- Render layers ------------------------------------------------------ */
+
+/* The CSS3D layer sits underneath the canvas and shows through the hole the
+   depth-only plane punches in it. */
+#css {
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+}
+
+#webgl {
+  position: fixed;
+  inset: 0;
+  z-index: 2;
+  display: block;
+  outline: none;
+}
+
+/* Once the camera is square on the glass, clicks must fall through the canvas
+   to the real DOM behind it. */
+body.is-focused #webgl {
+  pointer-events: none;
+}
+
+body.is-hovering-monitor #webgl {
+  cursor: pointer;
+}
+
+#ui {
+  position: fixed;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+}
+
+#ui > * {
+  pointer-events: auto;
+}
+
+/* --- Loader ------------------------------------------------------------- */
+
+.loader {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 26px;
+  background: #05070a;
+  transition: opacity 700ms ease 200ms, visibility 700ms 200ms;
+}
+
+.loader.is-done {
+  opacity: 0;
+  visibility: hidden;
+}
+
+.loader__name {
+  font-size: 15px;
+  font-weight: 500;
+  letter-spacing: 8px;
+  text-transform: uppercase;
+  color: var(--ui-text);
+}
+
+.loader__bar {
+  position: relative;
+  width: 220px;
+  height: 2px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.11);
+}
+
+.loader__fill {
+  position: absolute;
+  inset: 0;
+  transform: scaleX(0);
+  transform-origin: left;
+  background: var(--ui-accent);
+  box-shadow: 0 0 12px rgba(95, 208, 255, 0.7);
+  transition: transform 320ms ease;
+}
+
+.loader__status {
+  font-size: 11px;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  color: var(--ui-dim);
+}
+
+/* --- Screen-space UI ---------------------------------------------------- */
+
+.ui-panel {
+  position: absolute;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(8px);
+  transition: opacity 500ms ease, transform 500ms ease, visibility 500ms;
+}
+
+body.is-ready.is-idle .ui-panel--idle,
+body.is-ready.is-focused .ui-panel--focused {
+  opacity: 1;
+  visibility: visible;
+  transform: none;
+}
+
+.brand {
+  top: 40px;
+  left: 44px;
+}
+
+.brand__name {
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: 3.4px;
+  text-transform: uppercase;
+}
+
+.brand__role {
+  margin-top: 7px;
+  font-size: 11px;
+  letter-spacing: 2.6px;
+  text-transform: uppercase;
+  color: var(--ui-accent);
+}
+
+.brand__location {
+  margin-top: 4px;
+  font-size: 11px;
+  letter-spacing: 1.6px;
+  color: var(--ui-dim);
+}
+
+.hint {
+  bottom: 46px;
+  left: 50%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 11px 20px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 999px;
+  background: rgba(10, 14, 20, 0.6);
+  backdrop-filter: blur(6px);
+  font-size: 11.5px;
+  letter-spacing: 2.4px;
+  text-transform: uppercase;
+  color: var(--ui-dim);
+  /* The panel transition owns transform, so centre with a margin instead. */
+  margin-left: -140px;
+  width: 280px;
+  justify-content: center;
+}
+
+.hint__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--ui-accent);
+  box-shadow: 0 0 10px var(--ui-accent);
+  animation: hint-pulse 2s ease-in-out infinite;
+}
+
+@keyframes hint-pulse {
+  0%,
+  100% {
+    opacity: 0.35;
+    transform: scale(0.85);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.social {
+  right: 44px;
+  bottom: 44px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 10px;
+}
+
+.social a {
+  font-size: 11.5px;
+  letter-spacing: 2.2px;
+  text-transform: uppercase;
+  color: var(--ui-dim);
+  text-decoration: none;
+  transition: color 160ms ease;
+}
+
+.social a:hover {
+  color: var(--ui-accent);
+}
+
+.exit {
+  top: 38px;
+  left: 44px;
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 11px 20px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 999px;
+  background: rgba(10, 14, 20, 0.62);
+  backdrop-filter: blur(6px);
+  color: var(--ui-text);
+  font-family: inherit;
+  font-size: 11.5px;
+  letter-spacing: 2.2px;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: border-color 160ms ease, background 160ms ease, opacity 500ms ease,
+    visibility 500ms, transform 500ms ease;
+}
+
+.exit:hover {
+  border-color: rgba(95, 208, 255, 0.55);
+  background: rgba(95, 208, 255, 0.12);
+}
+
+/* --- Compact viewports -------------------------------------------------- */
+
+@media (max-width: 820px) {
+  .brand,
+  .exit {
+    top: 22px;
+    left: 20px;
+  }
+
+  .brand__name {
+    font-size: 13px;
+    letter-spacing: 2.4px;
+  }
+
+  .brand__role,
+  .brand__location {
+    font-size: 10px;
+  }
+
+  .social {
+    right: 20px;
+    bottom: 22px;
+    gap: 7px;
+  }
+
+  .social a {
+    font-size: 10px;
+    letter-spacing: 1.6px;
+  }
+
+  .hint {
+    bottom: 26px;
+    width: 230px;
+    margin-left: -115px;
+    padding: 9px 14px;
+    font-size: 10px;
+    letter-spacing: 1.6px;
+  }
+
+  .exit {
+    padding: 9px 15px;
+    font-size: 10px;
+    letter-spacing: 1.6px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hint__dot,
+  .crt__flicker {
+    animation: none;
+  }
+}

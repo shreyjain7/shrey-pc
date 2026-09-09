@@ -1,0 +1,1097 @@
+/* =========================================================================
+   The CRT screen surface.
+
+   Everything here is authored in the screen's own 1280x960 coordinate space
+   and scaled onto the glass by CSS3DRenderer, so all sizes are plain px.
+   ========================================================================= */
+
+.screen {
+  --bg: #0b1017;
+  --bg-far: #121a26;
+  --surface: #161d29;
+  --surface-2: #1c2534;
+  --line: #2a3546;
+  --line-soft: #212b3a;
+  --text: #dde6f2;
+  --dim: #8c9bb0;
+  --faint: #64738a;
+  --accent: #5fd0ff;
+  --accent-warm: #ffb454;
+  --good: #7ee08a;
+
+  --mono: ui-monospace, 'Cascadia Mono', 'SF Mono', Menlo, Consolas, monospace;
+  --sans: system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+
+  position: relative;
+  overflow: hidden;
+  background: #05070a;
+  color: var(--text);
+  font-family: var(--sans);
+  font-size: 17px;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+
+  /* Overridden only once the camera has settled square on the glass. */
+  pointer-events: none !important;
+  user-select: none;
+}
+
+.screen.is-interactive {
+  pointer-events: auto !important;
+}
+
+.screen.is-interactive .win__body,
+.screen.is-interactive .term {
+  user-select: text;
+}
+
+.crt {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+
+/* --- CRT artefacts ------------------------------------------------------ */
+
+.crt__scanlines,
+.crt__vignette,
+.crt__flicker {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.crt__scanlines {
+  background: repeating-linear-gradient(
+    to bottom,
+    rgba(0, 0, 0, 0.22) 0px,
+    rgba(0, 0, 0, 0.22) 1px,
+    transparent 1px,
+    transparent 4px
+  );
+  mix-blend-mode: multiply;
+  opacity: 0.55;
+}
+
+.crt__vignette {
+  background:
+    radial-gradient(120% 110% at 50% 50%, transparent 52%, rgba(0, 0, 0, 0.55) 100%),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.04), transparent 22%);
+}
+
+.crt__flicker {
+  background: rgba(150, 200, 255, 0.03);
+  animation: crt-flicker 5.5s steps(1, end) infinite;
+}
+
+@keyframes crt-flicker {
+  0%,
+  96% {
+    opacity: 0;
+  }
+  97% {
+    opacity: 0.5;
+  }
+  98% {
+    opacity: 0;
+  }
+  99% {
+    opacity: 0.35;
+  }
+}
+
+/* The moment the boot sequence hands over to the desktop. */
+.screen.is-switching .crt {
+  animation: crt-switch 200ms ease-in forwards;
+}
+
+@keyframes crt-switch {
+  0% {
+    transform: scaleY(1);
+    filter: brightness(1);
+  }
+  60% {
+    transform: scaleY(0.006);
+    filter: brightness(3.2);
+  }
+  100% {
+    transform: scaleY(0.006);
+    filter: brightness(0.4);
+  }
+}
+
+/* --- Layers ------------------------------------------------------------- */
+
+.layer {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 220ms ease;
+}
+
+.layer.is-visible {
+  opacity: 1;
+  visibility: visible;
+}
+
+/* --- Standby ------------------------------------------------------------ */
+
+.layer--standby {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  text-align: center;
+  background: radial-gradient(90% 80% at 50% 42%, #16202e 0%, #070a10 100%);
+}
+
+.standby__name {
+  margin: 0;
+  font-family: var(--mono);
+  font-size: 62px;
+  letter-spacing: 4px;
+  font-weight: 600;
+  color: #eaf3ff;
+  text-shadow: 0 0 26px rgba(95, 208, 255, 0.35);
+}
+
+.standby__role {
+  margin: 0;
+  font-family: var(--mono);
+  font-size: 24px;
+  letter-spacing: 7px;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.standby__hint {
+  margin: 46px 0 0;
+  font-family: var(--mono);
+  font-size: 19px;
+  letter-spacing: 3px;
+  color: var(--dim);
+  animation: standby-pulse 2.6s ease-in-out infinite;
+}
+
+@keyframes standby-pulse {
+  0%,
+  100% {
+    opacity: 0.45;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.caret {
+  display: inline-block;
+  width: 11px;
+  height: 19px;
+  margin-left: 8px;
+  vertical-align: -3px;
+  background: var(--accent);
+  animation: caret-blink 1s steps(1, end) infinite;
+}
+
+@keyframes caret-blink {
+  0%,
+  50% {
+    opacity: 1;
+  }
+  51%,
+  100% {
+    opacity: 0;
+  }
+}
+
+/* --- Boot --------------------------------------------------------------- */
+
+.layer--boot {
+  padding: 46px 52px;
+  overflow: hidden;
+  background: #05070a;
+  font-family: var(--mono);
+  font-size: 19px;
+  line-height: 1.62;
+  color: #b9c8da;
+}
+
+.boot__line {
+  white-space: pre;
+  animation: boot-in 90ms ease-out;
+}
+
+.boot__line--bright {
+  color: #eaf3ff;
+}
+
+.boot__line--accent {
+  color: var(--accent);
+}
+
+@keyframes boot-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* --- Desktop ------------------------------------------------------------ */
+
+.layer--desktop {
+  background:
+    radial-gradient(115% 90% at 78% 8%, rgba(95, 208, 255, 0.09), transparent 58%),
+    radial-gradient(95% 80% at 12% 96%, rgba(255, 180, 84, 0.07), transparent 60%),
+    linear-gradient(160deg, var(--bg-far), var(--bg) 62%);
+}
+
+.icons {
+  position: absolute;
+  top: 26px;
+  left: 24px;
+  display: grid;
+  grid-template-columns: repeat(2, 108px);
+  gap: 6px;
+}
+
+.icon {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 6px 10px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 140ms ease, border-color 140ms ease;
+}
+
+.icon:hover,
+.icon:focus-visible {
+  background: rgba(95, 208, 255, 0.1);
+  border-color: rgba(95, 208, 255, 0.35);
+  outline: none;
+}
+
+.icon__glyph {
+  display: grid;
+  place-items: center;
+  width: 46px;
+  height: 46px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: linear-gradient(155deg, var(--surface-2), var(--surface));
+  color: var(--accent);
+  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.35);
+}
+
+.icon__glyph svg {
+  width: 24px;
+  height: 24px;
+}
+
+.icon__label {
+  font-family: var(--mono);
+  letter-spacing: 0.2px;
+  text-align: center;
+  line-height: 1.25;
+}
+
+.windows {
+  position: absolute;
+  inset: 0 0 56px 0;
+}
+
+/* --- Windows ------------------------------------------------------------ */
+
+.win {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  min-width: 320px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+  box-shadow:
+    0 20px 50px rgba(0, 0, 0, 0.55),
+    0 2px 0 rgba(255, 255, 255, 0.04) inset;
+  opacity: 0;
+  transform: scale(0.97) translateY(8px);
+  transition: opacity 160ms ease, transform 160ms ease;
+}
+
+.win.is-open {
+  opacity: 1;
+  transform: none;
+}
+
+.win.is-closing {
+  opacity: 0;
+  transform: scale(0.97) translateY(6px);
+}
+
+.win.is-minimised {
+  opacity: 0;
+  transform: scale(0.94) translateY(28px);
+  pointer-events: none;
+}
+
+.win.is-dragging {
+  transition: none;
+}
+
+.win.is-maximised {
+  border-radius: 0;
+}
+
+.win__bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 0 0 auto;
+  height: 42px;
+  padding: 0 10px 0 14px;
+  border-bottom: 1px solid var(--line-soft);
+  background: linear-gradient(to bottom, #1e2735, #182029);
+  cursor: grab;
+  touch-action: none;
+}
+
+.win.is-dragging .win__bar {
+  cursor: grabbing;
+}
+
+.win__icon {
+  display: grid;
+  place-items: center;
+  color: var(--faint);
+}
+
+.win__icon svg {
+  width: 17px;
+  height: 17px;
+}
+
+.win.is-focused .win__icon {
+  color: var(--accent);
+}
+
+.win__title {
+  flex: 1;
+  font-family: var(--mono);
+  font-size: 14px;
+  letter-spacing: 0.4px;
+  color: var(--dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.win.is-focused .win__title {
+  color: var(--text);
+}
+
+.win__controls {
+  display: flex;
+  gap: 7px;
+}
+
+.win__control {
+  width: 14px;
+  height: 14px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: #39424f;
+  cursor: pointer;
+  transition: background 120ms ease, transform 120ms ease;
+}
+
+.win__control:hover {
+  transform: scale(1.14);
+}
+
+.win.is-focused .win__control--minimise {
+  background: #f0bc55;
+}
+
+.win.is-focused .win__control--maximise {
+  background: #5fd08a;
+}
+
+.win.is-focused .win__control--close {
+  background: #f0665f;
+}
+
+.win__body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+/* --- Scrollbars --------------------------------------------------------- */
+
+.win__body::-webkit-scrollbar,
+.term::-webkit-scrollbar {
+  width: 10px;
+}
+
+.win__body::-webkit-scrollbar-track,
+.term::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.25);
+}
+
+.win__body::-webkit-scrollbar-thumb,
+.term::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: 6px;
+  background: #3a4757;
+  background-clip: padding-box;
+}
+
+.win__body::-webkit-scrollbar-thumb:hover,
+.term::-webkit-scrollbar-thumb:hover {
+  background: #4c5b6d;
+  background-clip: padding-box;
+}
+
+/* --- Document content --------------------------------------------------- */
+
+.doc {
+  padding: 26px 30px 34px;
+}
+
+.doc__head {
+  margin-bottom: 22px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.doc__title {
+  margin: 0;
+  font-family: var(--mono);
+  font-size: 25px;
+  font-weight: 600;
+  letter-spacing: 0.4px;
+}
+
+.doc__sub {
+  margin: 6px 0 0;
+  color: var(--dim);
+  font-size: 15px;
+}
+
+.doc__note {
+  margin: 24px 0 0;
+  padding: 14px 16px;
+  border-left: 2px solid var(--accent);
+  border-radius: 0 6px 6px 0;
+  background: rgba(95, 208, 255, 0.07);
+  color: var(--dim);
+  font-size: 15px;
+}
+
+.prose p {
+  margin: 0 0 14px;
+  color: #c6d2e2;
+}
+
+.prose p:last-child {
+  margin-bottom: 0;
+}
+
+/* Hero (About) */
+
+.hero {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  margin-bottom: 24px;
+  padding-bottom: 22px;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.hero__avatar {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 84px;
+  height: 84px;
+  border: 1px solid rgba(95, 208, 255, 0.4);
+  border-radius: 14px;
+  background: linear-gradient(150deg, rgba(95, 208, 255, 0.2), rgba(95, 208, 255, 0.04));
+  color: #eaf6ff;
+  font-family: var(--mono);
+  font-size: 30px;
+  font-weight: 600;
+  letter-spacing: 1px;
+}
+
+.hero__name {
+  margin: 0;
+  font-size: 29px;
+  font-weight: 650;
+  letter-spacing: 0.2px;
+}
+
+.hero__role {
+  margin: 3px 0 0;
+  color: var(--accent);
+  font-family: var(--mono);
+  font-size: 15px;
+  letter-spacing: 1.4px;
+  text-transform: uppercase;
+}
+
+.hero__tagline {
+  margin: 8px 0 0;
+  color: var(--dim);
+  font-size: 15px;
+}
+
+.hero__location {
+  margin: 2px 0 0;
+  color: var(--faint);
+  font-size: 14px;
+}
+
+/* Entries */
+
+.entries {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.entry {
+  padding: 16px 18px;
+  border: 1px solid var(--line-soft);
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.017);
+}
+
+.entry__top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.entry__title {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 640;
+  letter-spacing: 0.1px;
+}
+
+.entry__subtitle {
+  margin: 3px 0 0;
+  color: var(--accent);
+  font-size: 14px;
+  font-family: var(--mono);
+}
+
+.entry__period {
+  flex: 0 0 auto;
+  color: var(--faint);
+  font-family: var(--mono);
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.entry__meta {
+  margin: 8px 0 0;
+  color: var(--accent-warm);
+  font-family: var(--mono);
+  font-size: 13px;
+}
+
+.entry__bullets {
+  margin: 10px 0 0;
+  padding-left: 18px;
+  color: #bccadb;
+  font-size: 15px;
+}
+
+.entry__bullets li {
+  margin: 5px 0;
+}
+
+.entry__bullets li::marker {
+  color: var(--faint);
+}
+
+/* Skills */
+
+.skill-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 14px;
+}
+
+.skill-card {
+  padding: 16px 18px;
+  border: 1px solid var(--line-soft);
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.017);
+}
+
+.skill-card__label {
+  margin: 0 0 12px;
+  color: var(--dim);
+  font-family: var(--mono);
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 1.4px;
+  text-transform: uppercase;
+}
+
+.skill-card__tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.tag {
+  padding: 5px 11px;
+  border: 1px solid rgba(95, 208, 255, 0.28);
+  border-radius: 999px;
+  background: rgba(95, 208, 255, 0.09);
+  color: #cbe9fb;
+  font-family: var(--mono);
+  font-size: 13px;
+}
+
+/* Contact */
+
+.links {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.link-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 16px;
+  border: 1px solid var(--line-soft);
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.017);
+  color: inherit;
+  text-decoration: none;
+  transition: border-color 140ms ease, background 140ms ease, transform 140ms ease;
+}
+
+.link-row:hover {
+  border-color: rgba(95, 208, 255, 0.45);
+  background: rgba(95, 208, 255, 0.08);
+  transform: translateX(3px);
+}
+
+.link-row__label {
+  flex: 0 0 92px;
+  color: var(--dim);
+  font-family: var(--mono);
+  font-size: 13px;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+}
+
+.link-row__value {
+  flex: 1;
+  font-size: 15px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.link-row__arrow {
+  color: var(--accent);
+  font-size: 17px;
+}
+
+/* Resume sheet */
+
+.resume__toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 18px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.resume__filename {
+  color: var(--dim);
+  font-family: var(--mono);
+  font-size: 14px;
+}
+
+.button {
+  padding: 9px 18px;
+  border: 1px solid rgba(95, 208, 255, 0.45);
+  border-radius: 7px;
+  background: rgba(95, 208, 255, 0.12);
+  color: #d8f1ff;
+  font-family: var(--mono);
+  font-size: 14px;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background 140ms ease;
+}
+
+.button:hover {
+  background: rgba(95, 208, 255, 0.24);
+}
+
+.sheet {
+  padding: 30px 34px;
+  border-radius: 8px;
+  background: #f6f7f9;
+  color: #16181d;
+}
+
+.sheet__head {
+  margin-bottom: 22px;
+  text-align: center;
+}
+
+.sheet__head h1 {
+  margin: 0 0 6px;
+  font-size: 30px;
+  letter-spacing: 0.6px;
+}
+
+.sheet__contact {
+  margin: 0;
+  color: #5b6068;
+  font-size: 13px;
+}
+
+.sheet__section {
+  margin-top: 22px;
+}
+
+.sheet__section > h2 {
+  margin: 0 0 12px;
+  padding-bottom: 5px;
+  border-bottom: 1.5px solid #16181d;
+  font-size: 14px;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+}
+
+.sheet__skill {
+  margin: 5px 0;
+  font-size: 14px;
+}
+
+/* The shared entry card, restyled for the light "paper" sheet. */
+.sheet .entry {
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  background: none;
+}
+
+.sheet .entries {
+  gap: 12px;
+}
+
+.sheet .entry + .entry {
+  margin-top: 12px;
+}
+
+.sheet .entry__title {
+  font-size: 15px;
+}
+
+.sheet .entry__subtitle {
+  color: #5b6068;
+  font-family: var(--sans);
+  font-size: 13px;
+}
+
+.sheet .entry__period,
+.sheet .entry__meta {
+  color: #5b6068;
+  font-family: var(--sans);
+  font-size: 13px;
+}
+
+.sheet .entry__bullets {
+  color: #2c3038;
+  font-size: 13px;
+}
+
+/* --- Terminal ----------------------------------------------------------- */
+
+.term {
+  /* The whole terminal scrolls, so the prompt sits directly under the last
+     line of output instead of being pinned to the bottom of the window. */
+  height: 100%;
+  padding: 16px 18px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  background: #070a0f;
+  font-family: var(--mono);
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+.term__output {
+  display: flow-root;
+}
+
+.out {
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: #b7c6d8;
+}
+
+.out--echo {
+  color: #6f7f93;
+}
+
+.out--dim {
+  color: var(--faint);
+}
+
+.out--accent {
+  color: var(--accent);
+}
+
+.out--warn {
+  color: #ff8f7a;
+}
+
+.term__line {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  flex: 0 0 auto;
+  padding-top: 8px;
+  cursor: text;
+}
+
+.term__prompt {
+  flex: 0 0 auto;
+  color: var(--good);
+}
+
+.term__input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  caret-color: var(--accent);
+  outline: none;
+}
+
+/* --- Taskbar ------------------------------------------------------------ */
+
+.taskbar {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 500;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 56px;
+  padding: 0 14px;
+  border-top: 1px solid var(--line);
+  background: rgba(13, 18, 26, 0.92);
+  backdrop-filter: blur(8px);
+}
+
+.taskbar__start {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 8px 16px 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: linear-gradient(to bottom, #1f2836, #171e29);
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 14px;
+  letter-spacing: 0.6px;
+  cursor: pointer;
+  transition: border-color 140ms ease;
+}
+
+.taskbar__start:hover {
+  border-color: rgba(95, 208, 255, 0.5);
+}
+
+.taskbar__logo {
+  width: 15px;
+  height: 15px;
+  border-radius: 3px;
+  background: linear-gradient(135deg, var(--accent), #2f8fc4);
+  box-shadow: 0 0 10px rgba(95, 208, 255, 0.55);
+}
+
+.taskbar__apps {
+  display: flex;
+  flex: 1;
+  gap: 7px;
+  overflow: hidden;
+}
+
+.taskbar__app {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 190px;
+  padding: 8px 14px;
+  border: 1px solid transparent;
+  border-bottom: 2px solid transparent;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.045);
+  color: var(--dim);
+  font-family: var(--mono);
+  font-size: 13px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+  transition: color 140ms ease, background 140ms ease, border-color 140ms ease;
+}
+
+.taskbar__app:hover {
+  background: rgba(255, 255, 255, 0.09);
+  color: var(--text);
+}
+
+.taskbar__app.is-active {
+  border-bottom-color: var(--accent);
+  background: rgba(95, 208, 255, 0.13);
+  color: var(--text);
+}
+
+.taskbar__app.is-minimised {
+  opacity: 0.6;
+}
+
+.taskbar__icon svg {
+  width: 15px;
+  height: 15px;
+}
+
+.taskbar__clock {
+  flex: 0 0 auto;
+  padding-left: 8px;
+  color: var(--dim);
+  font-family: var(--mono);
+  font-size: 14px;
+  letter-spacing: 0.6px;
+}
+
+/* --- Start menu --------------------------------------------------------- */
+
+.start-menu {
+  position: absolute;
+  bottom: 64px;
+  left: 14px;
+  z-index: 600;
+  width: 268px;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: rgba(18, 24, 34, 0.97);
+  box-shadow: 0 22px 46px rgba(0, 0, 0, 0.6);
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(10px);
+  transition: opacity 150ms ease, transform 150ms ease, visibility 150ms;
+}
+
+.start-menu.is-open {
+  opacity: 1;
+  visibility: visible;
+  transform: none;
+}
+
+.start-menu__head {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 12px 14px 14px;
+  margin-bottom: 6px;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.start-menu__name {
+  font-size: 16px;
+  font-weight: 620;
+}
+
+.start-menu__role {
+  color: var(--accent);
+  font-family: var(--mono);
+  font-size: 12px;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+}
+
+.start-menu__list {
+  display: flex;
+  flex-direction: column;
+}
+
+.start-menu__item {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  width: 100%;
+  padding: 9px 12px;
+  border: none;
+  border-radius: 6px;
+  background: none;
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 14px;
+  text-align: left;
+  cursor: pointer;
+  transition: background 120ms ease;
+}
+
+.start-menu__item:hover {
+  background: rgba(95, 208, 255, 0.14);
+}
+
+.start-menu__icon {
+  display: grid;
+  place-items: center;
+  color: var(--faint);
+}
+
+.start-menu__icon svg {
+  width: 16px;
+  height: 16px;
+}
+
+.start-menu__item--power {
+  margin-top: 6px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line-soft);
+  border-radius: 0 0 6px 6px;
+  color: var(--accent-warm);
+}

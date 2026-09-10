@@ -561,6 +561,10 @@ export class Experience {
       // The standby screen says "press any key to boot", so honour it.
       if (this.ready && this.view === 'room' && event.key === 'Enter') this.enterScreen();
 
+      // After a shutdown the camera is already at the monitor, so the room's
+      // enter path never runs and nothing would boot the machine back up.
+      if (this.ready && this.view !== 'room' && this.os.state === 'standby') this.os.powerOn();
+
       // `V` cycles the camera without reaching for the corner controls, but
       // never while a field somewhere in the OS has the caret.
       if (event.key.toLowerCase() === 'v' && !event.metaKey && !event.ctrlKey) {

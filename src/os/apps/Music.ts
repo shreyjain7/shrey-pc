@@ -26,7 +26,13 @@ const ICON = {
 /** Semitone offsets from the root, per chord, as a repeating progression. */
 interface Track {
   title: string;
+  album: string;
   mood: string;
+  /** Nominal run time in seconds. The synth is endless; this is what the
+   *  scrubber measures against, and where the track rolls over to the next. */
+  length: number;
+  /** Base hue for the procedural cover art. */
+  hue: number;
   bpm: number;
   root: number;
   /** Chord roots in semitones, one per bar. */
@@ -41,7 +47,10 @@ interface Track {
 const TRACKS: Track[] = [
   {
     title: 'Compile Loop',
-    mood: 'Focus · 92 BPM',
+    album: 'Build Artifacts',
+    mood: 'Focus',
+    length: 214,
+    hue: 198,
     bpm: 92,
     root: 55,
     progression: [0, -3, 5, 2],
@@ -51,7 +60,10 @@ const TRACKS: Track[] = [
   },
   {
     title: 'Night Build',
-    mood: 'Ambient · 76 BPM',
+    album: 'Build Artifacts',
+    mood: 'Ambient',
+    length: 268,
+    hue: 262,
     bpm: 76,
     root: 50,
     progression: [0, 7, 3, 5],
@@ -61,7 +73,10 @@ const TRACKS: Track[] = [
   },
   {
     title: 'Cache Warm',
-    mood: 'Drive · 108 BPM',
+    album: 'Build Artifacts',
+    mood: 'Drive',
+    length: 186,
+    hue: 22,
     bpm: 108,
     root: 57,
     progression: [0, 0, -2, 3],
@@ -71,7 +86,10 @@ const TRACKS: Track[] = [
   },
   {
     title: 'Fan Curve',
-    mood: 'Late · 84 BPM',
+    album: 'Thermal Throttle',
+    mood: 'Late',
+    length: 232,
+    hue: 8,
     bpm: 84,
     root: 53,
     progression: [0, 5, -4, -2],
@@ -79,7 +97,87 @@ const TRACKS: Track[] = [
     kick: [1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 0],
     hat: [0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1],
   },
+  {
+    title: 'Thermal Throttle',
+    album: 'Thermal Throttle',
+    mood: 'Tense',
+    length: 198,
+    hue: 340,
+    bpm: 128,
+    root: 45,
+    progression: [0, 0, 3, -2],
+    scale: [0, 1, 5, 6, 8, 12, 13],
+    kick: [1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0],
+    hat: [0, 1, 1, 0, 0, 1, 1, 0, 0, 1, 1, 0, 0, 1, 1, 1],
+  },
+  {
+    title: 'Idle Clock',
+    album: 'Thermal Throttle',
+    mood: 'Sparse',
+    length: 305,
+    hue: 168,
+    bpm: 64,
+    root: 48,
+    progression: [0, 4, 7, 4],
+    scale: [0, 2, 4, 7, 9, 11, 12],
+    kick: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+    hat: [0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0],
+  },
+  {
+    title: 'Packet Loss',
+    album: 'Uplink',
+    mood: 'Glitch',
+    length: 176,
+    hue: 288,
+    bpm: 140,
+    root: 52,
+    progression: [0, -5, 2, -3],
+    scale: [0, 3, 5, 6, 10, 12, 15],
+    kick: [1, 0, 0, 1, 0, 1, 0, 0, 1, 0, 0, 1, 0, 1, 0, 0],
+    hat: [1, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1, 0, 1, 0, 1, 1],
+  },
+  {
+    title: 'Uplink',
+    album: 'Uplink',
+    mood: 'Wide',
+    length: 249,
+    hue: 212,
+    bpm: 96,
+    root: 50,
+    progression: [0, 5, 9, 7],
+    scale: [0, 2, 4, 5, 7, 9, 11],
+    kick: [1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 1],
+    hat: [0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0],
+  },
+  {
+    title: 'Cold Boot',
+    album: 'Uplink',
+    mood: 'Slow',
+    length: 288,
+    hue: 236,
+    bpm: 70,
+    root: 43,
+    progression: [0, 3, -2, 5],
+    scale: [0, 3, 7, 10, 12, 14, 17],
+    kick: [1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0],
+    hat: [0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0],
+  },
 ];
+
+/** The library's shelves. "All tracks" is synthesised, the rest are albums. */
+const PLAYLISTS: Array<{ name: string; note: string; tracks: number[] }> = [
+  { name: 'All tracks', note: 'Everything the synth knows', tracks: TRACKS.map((_, i) => i) },
+  ...[...new Set(TRACKS.map((track) => track.album))].map((album) => ({
+    name: album,
+    note: 'Album',
+    tracks: TRACKS.map((track, i) => (track.album === album ? i : -1)).filter((i) => i >= 0),
+  })),
+];
+
+const clock = (seconds: number) => {
+  const whole = Math.max(0, Math.floor(seconds));
+  return Math.floor(whole / 60) + ':' + String(whole % 60).padStart(2, '0');
+};
 
 /** MIDI note → Hz. */
 const hz = (note: number) => 440 * 2 ** ((note - 69) / 12);
@@ -261,22 +359,34 @@ export function createMusic(): HTMLElement {
   let playing = false;
   let volume = 0.6;
 
-  /* --- Visualiser ------------------------------------------------------- */
+  let shelf = 0;
 
-  const stage = el('div', 'player__stage');
-  const canvas = el('canvas', 'player__viz');
-  stage.append(canvas);
+  /*
+   * Play position is read off the wall clock rather than accumulated from the
+   * ticker's delta, because that delta is deliberately clamped to 1/20s so a
+   * backgrounded tab cannot fling the springs. On a slow frame budget that
+   * clamp makes an accumulated clock run behind real time.
+   *
+   * `offset` is the position at the last transport change; `startedAt` is when
+   * playback resumed from it.
+   */
+  let offset = 0;
+  let startedAt = 0;
 
-  const nowPlaying = el('div', 'player__now');
-  const trackTitle = el('h2', 'player__title', TRACKS[0].title);
-  const trackMood = el('p', 'player__mood', TRACKS[0].mood);
-  nowPlaying.append(trackTitle, trackMood);
-  stage.append(nowPlaying);
-  root.append(stage);
+  const position = () => (playing ? offset + (performance.now() - startedAt) / 1000 : offset);
 
-  /* --- Transport -------------------------------------------------------- */
+  function seek(seconds: number) {
+    offset = Math.max(0, seconds);
+    startedAt = performance.now();
+    syncBar();
+  }
 
-  const transport = el('div', 'player__transport');
+  /** Procedural cover art — two hues and a soft highlight, no image files. */
+  const paintCover = (node: HTMLElement, hue: number) => {
+    node.style.background =
+      `radial-gradient(circle at 30% 24%, hsl(${hue} 92% 68% / 0.95), transparent 58%),` +
+      `linear-gradient(145deg, hsl(${hue} 68% 42%), hsl(${(hue + 48) % 360} 62% 22%))`;
+  };
 
   const makeButton = (glyph: string, label: string, onClick: () => void, className = '') => {
     const node = el('button', ('player__btn ' + className).trim());
@@ -288,71 +398,240 @@ export function createMusic(): HTMLElement {
     return node;
   };
 
+  /* --- Sidebar ---------------------------------------------------------- */
+
+  const body = el('div', 'player__body');
+
+  const sidebar = el('aside', 'player__sidebar');
+  sidebar.append(el('div', 'player__brand', 'Library'));
+
+  const nav = el('nav', 'player__nav');
+  const navButtons: HTMLElement[] = [];
+
+  PLAYLISTS.forEach((playlist, position) => {
+    const item = el('button', 'player__nav-item');
+    item.type = 'button';
+
+    const swatch = el('span', 'player__nav-art');
+    paintCover(swatch, TRACKS[playlist.tracks[0]].hue);
+    item.append(swatch);
+
+    const meta = el('span', 'player__nav-meta');
+    meta.append(el('span', 'player__nav-name', playlist.name));
+    meta.append(el('span', 'player__nav-note', playlist.tracks.length + ' tracks'));
+    item.append(meta);
+
+    item.addEventListener('click', () => {
+      shelf = position;
+      renderShelf();
+    });
+
+    navButtons.push(item);
+    nav.append(item);
+  });
+
+  sidebar.append(nav);
+  body.append(sidebar);
+
+  /* --- Main pane -------------------------------------------------------- */
+
+  const main = el('main', 'player__main');
+
+  const hero = el('header', 'player__hero');
+  const heroArt = el('div', 'player__hero-art');
+  hero.append(heroArt);
+
+  const heroMeta = el('div', 'player__hero-meta');
+  heroMeta.append(el('span', 'player__hero-kind', 'Playlist'));
+  const heroName = el('h2', 'player__hero-name', '');
+  const heroNote = el('p', 'player__hero-note', '');
+  heroMeta.append(heroName, heroNote);
+  hero.append(heroMeta);
+  main.append(hero);
+
+  const table = el('div', 'player__tracks');
+  main.append(table);
+  body.append(main);
+  root.append(body);
+
+  /* --- Now-playing bar -------------------------------------------------- */
+
+  const bar = el('footer', 'player__bar');
+
+  const barNow = el('div', 'player__bar-now');
+  const barArt = el('div', 'player__bar-art');
+  barNow.append(barArt);
+  const barMeta = el('div', 'player__bar-meta');
+  const trackTitle = el('span', 'player__bar-title', TRACKS[0].title);
+  const trackMood = el('span', 'player__bar-album', TRACKS[0].album);
+  barMeta.append(trackTitle, trackMood);
+  barNow.append(barMeta);
+  bar.append(barNow);
+
+  const barMid = el('div', 'player__bar-mid');
+  const transport = el('div', 'player__transport');
   const playButton = makeButton(ICON.play, 'Play', () => toggle(), 'player__btn--play');
   transport.append(
-    makeButton(ICON.prev, 'Previous', () => select(index - 1)),
+    makeButton(ICON.prev, 'Previous', () => step(-1)),
     playButton,
-    makeButton(ICON.next, 'Next', () => select(index + 1)),
+    makeButton(ICON.next, 'Next', () => step(1)),
   );
+  barMid.append(transport);
 
-  const volumeWrap = el('label', 'player__volume');
-  volumeWrap.append(el('span', 'player__volume-label', 'Vol'));
+  const scrub = el('div', 'player__scrub');
+  const scrubStart = el('span', 'player__scrub-time', '0:00');
+  const scrubTrack = el('div', 'player__scrub-track');
+  const scrubFill = el('div', 'player__scrub-fill');
+  scrubTrack.append(scrubFill);
+  const scrubEnd = el('span', 'player__scrub-time', '0:00');
+  scrub.append(scrubStart, scrubTrack, scrubEnd);
+  barMid.append(scrub);
+  bar.append(barMid);
+
+  // Seeking only moves the scrubber: the synth generates rather than plays
+  // back, so there is no buffer to jump around inside.
+  scrubTrack.addEventListener('click', (event) => {
+    const box = scrubTrack.getBoundingClientRect();
+    if (!box.width) return;
+    const ratio = Math.min(Math.max((event.clientX - box.left) / box.width, 0), 1);
+    seek(ratio * TRACKS[index].length);
+  });
+
+  const barEnd = el('div', 'player__bar-end');
+  const canvas = el('canvas', 'player__viz');
+  barEnd.append(canvas);
+
   const volumeInput = el('input', 'player__slider');
   volumeInput.type = 'range';
   volumeInput.min = '0';
   volumeInput.max = '100';
   volumeInput.value = String(volume * 100);
+  volumeInput.setAttribute('aria-label', 'Volume');
   volumeInput.addEventListener('input', () => {
     volume = Number(volumeInput.value) / 100;
     engine?.setVolume(playing ? volume * 0.5 : 0);
   });
-  volumeWrap.append(volumeInput);
-  transport.append(volumeWrap);
-  root.append(transport);
+  barEnd.append(volumeInput);
+  bar.append(barEnd);
+  root.append(bar);
 
-  /* --- Playlist --------------------------------------------------------- */
+  /* --- Shelf rendering -------------------------------------------------- */
 
-  const list = el('div', 'player__list');
-  const rows: HTMLElement[] = [];
+  const rows = new Map<number, HTMLElement>();
 
-  TRACKS.forEach((track, position) => {
-    const row = el('button', 'player__row');
-    row.type = 'button';
-    row.append(el('span', 'player__row-index', String(position + 1).padStart(2, '0')));
+  function renderShelf() {
+    const playlist = PLAYLISTS[shelf];
 
-    const meta = el('span', 'player__row-meta');
-    meta.append(el('span', 'player__row-title', track.title));
-    meta.append(el('span', 'player__row-mood', track.mood));
-    row.append(meta);
+    navButtons.forEach((item, position) => item.classList.toggle('is-active', position === shelf));
 
-    row.append(el('span', 'player__row-bpm', track.bpm + ' BPM'));
-    row.addEventListener('click', () => {
-      select(position);
-      if (!playing) toggle();
+    paintCover(heroArt, TRACKS[playlist.tracks[0]].hue);
+    heroName.textContent = playlist.name;
+    heroNote.textContent =
+      playlist.note +
+      ' · ' +
+      playlist.tracks.length +
+      ' tracks · ' +
+      clock(playlist.tracks.reduce((total, i) => total + TRACKS[i].length, 0));
+
+    table.replaceChildren();
+    rows.clear();
+
+    const head = el('div', 'player__track player__track--head');
+    head.append(el('span', 'player__track-index', '#'));
+    head.append(el('span', 'player__track-title', 'Title'));
+    head.append(el('span', 'player__track-album', 'Album'));
+    head.append(el('span', 'player__track-bpm', 'BPM'));
+    head.append(el('span', 'player__track-time', 'Time'));
+    table.append(head);
+
+    playlist.tracks.forEach((trackIndex, position) => {
+      const track = TRACKS[trackIndex];
+      const row = el('div', 'player__track');
+      row.tabIndex = 0;
+      row.setAttribute('role', 'button');
+
+      const number = el('span', 'player__track-index', String(position + 1));
+      row.append(number);
+
+      const title = el('span', 'player__track-title');
+      const art = el('span', 'player__track-art');
+      paintCover(art, track.hue);
+      title.append(art);
+      const names = el('span', 'player__track-names');
+      names.append(el('span', 'player__track-name', track.title));
+      names.append(el('span', 'player__track-mood', track.mood));
+      title.append(names);
+      row.append(title);
+
+      row.append(el('span', 'player__track-album', track.album));
+      row.append(el('span', 'player__track-bpm', String(track.bpm)));
+      row.append(el('span', 'player__track-time', clock(track.length)));
+
+      const open = () => {
+        if (trackIndex === index) toggle();
+        else {
+          select(trackIndex);
+          if (!playing) toggle();
+        }
+      };
+
+      row.addEventListener('click', open);
+      row.addEventListener('keydown', (event) => {
+        event.stopPropagation();
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          open();
+        }
+      });
+
+      rows.set(trackIndex, row);
+      table.append(row);
     });
 
-    rows.push(row);
-    list.append(row);
-  });
-  root.append(list);
+    syncRows();
+  }
 
   /* --- Behaviour -------------------------------------------------------- */
 
   function syncRows() {
-    rows.forEach((row, position) => {
-      row.classList.toggle('is-active', position === index);
-      row.classList.toggle('is-playing', position === index && playing);
+    rows.forEach((row, trackIndex) => {
+      row.classList.toggle('is-active', trackIndex === index);
+      row.classList.toggle('is-playing', trackIndex === index && playing);
     });
     trackTitle.textContent = TRACKS[index].title;
-    trackMood.textContent = TRACKS[index].mood;
+    trackMood.textContent = TRACKS[index].album;
+    paintCover(barArt, TRACKS[index].hue);
     playButton.innerHTML = playing ? ICON.pause : ICON.play;
+    playButton.title = playing ? 'Pause' : 'Play';
     root.classList.toggle('is-playing', playing);
+    syncBar();
+  }
+
+  function syncBar() {
+    const length = TRACKS[index].length;
+    const at = Math.min(position(), length);
+    scrubStart.textContent = clock(at);
+    scrubEnd.textContent = clock(length);
+    scrubFill.style.transform = 'scaleX(' + (at / length).toFixed(4) + ')';
   }
 
   function select(next: number) {
     index = (next + TRACKS.length) % TRACKS.length;
+    offset = 0;
+    startedAt = performance.now();
     engine?.setTrack(TRACKS[index]);
     syncRows();
+  }
+
+  /** Moves within the shelf on screen, falling back to the whole library. */
+  function step(delta: number) {
+    const list = PLAYLISTS[shelf].tracks;
+    const at = list.indexOf(index);
+    if (at < 0) {
+      select(index + delta);
+      return;
+    }
+    select(list[(at + delta + list.length) % list.length]);
   }
 
   function toggle() {
@@ -366,6 +645,10 @@ export function createMusic(): HTMLElement {
       engine = new Engine(new Ctor(), TRACKS[index]);
       engine.start();
     }
+
+    // Freeze the position before the flip, then restart the clock from it.
+    offset = position();
+    startedAt = performance.now();
 
     playing = !playing;
     engine.setVolume(playing ? volume * 0.5 : 0);
@@ -412,10 +695,14 @@ export function createMusic(): HTMLElement {
   };
 
   const stop = ticker((delta, now) => {
+    if (playing && position() >= TRACKS[index].length) step(1);
+
     drawClock += delta;
     if (drawClock < DRAW_INTERVAL) return true;
-    const step = drawClock;
+    const frameStep = drawClock;
     drawClock = 0;
+
+    if (playing) syncBar();
 
     const context = canvas.getContext('2d');
     if (!context) return true;
@@ -449,7 +736,7 @@ export function createMusic(): HTMLElement {
 
     context.clearRect(0, 0, width, height);
 
-    const smoothing = 1 - Math.exp(-14 * step);
+    const smoothing = 1 - Math.exp(-14 * frameStep);
     const barWidth = width / BARS;
     const inset = barWidth * 0.24;
     const drawWidth = barWidth - inset;
@@ -503,7 +790,7 @@ export function createMusic(): HTMLElement {
     return true;
   });
 
-  syncRows();
+  renderShelf();
 
   root.addEventListener('app:destroy', () => {
     stop();

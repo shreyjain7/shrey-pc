@@ -179,6 +179,7 @@ function systemTree(): FsNode {
     dir('home', [
       dir('shrey', [
         dir('Desktop', [
+          app('Showcase', 'showcase'),
           app('Aperture', 'browser'),
           app('Timetable', 'timetable'),
           app('System Monitor', 'sysmon'),
@@ -189,9 +190,12 @@ function systemTree(): FsNode {
           app('Notepad', 'notepad'),
           app('Resume.pdf', 'resume'),
           app('Minesweeper', 'minesweeper'),
+          app('Wordle', 'wordle'),
           app('Paint', 'paint'),
           app('Calculator', 'calculator'),
+          app('DOS', 'dos'),
           app('Settings', 'settings'),
+          app('Credits', 'credits'),
         ]),
         dir('Documents', [
           file('README.txt', readme),

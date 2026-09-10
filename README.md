@@ -111,13 +111,24 @@ terminal appears on the desktop, a file renamed on the desktop is visible to
   persists.
 - **System Monitor** — the live case cam, four rolling graphs, temperatures,
   the fan curve, and a process table built from what is actually open.
-- **Player** — four generative tracks synthesised from a chord progression and
-  a step sequencer, with a spectrum visualiser that also drives the speakers in
-  the room. No audio files.
+- **Player** — a library of nine generative tracks across three albums, laid out
+  like a streaming client: playlist sidebar, cover art, a track table and a
+  now-playing bar with transport, scrubber and spectrum analyser. Every track is
+  synthesised live from a chord progression and a step sequencer, and the output
+  level drives the speakers in the room. No audio files ship.
+- **Showcase** — the whole CV behind one vertical nav, for reading straight
+  through instead of opening eight windows.
 - **Wire**, a news reader — the Hacker News front page through the public
   Algolia endpoint, laid out as a reader rather than a list of links.
 - **Minesweeper** — three difficulties, flags, chording, a timer, and a first
   click that is always safe.
+- **Wordle** — six guesses, proper duplicate-letter scoring (exact matches claim
+  their letter before anything comes back yellow), a keyboard that tracks what
+  you know, and a record that persists.
+- **DOS** — a real DOSBox via js-dos, loaded from a CDN on first open. It ships
+  without games: DOS game data is copyrighted, so it takes a `.jsdos` bundle you
+  point it at, from disk or a URL.
+- **Credits** — what the thing is made of, and where the idea came from.
 - **Calculator** — four functions, percent and sign, mouse or keyboard.
 - **Settings** — five wallpapers and five accent colours applied live as CSS
   custom properties, toggles for scanlines, flicker, key clicks and a 24-hour
@@ -127,7 +138,8 @@ terminal appears on the desktop, a file renamed on the desktop is visible to
   minimise / maximise / close, snapping (Alt+←/→/↑), Alt+Tab, Ctrl+W, a taskbar
   with running apps and a system tray, a clock that opens a calendar, a start
   menu with search across both apps and files, right-click context menus on the
-  desktop and on every icon, in-CRT dialogs, and toast notifications.
+  desktop and on every icon, in-CRT dialogs, toast notifications, and a shutdown
+  sequence that halts the machine back to standby — where any key boots it again.
 
 The CV still has its own windows — About, Projects, Experience, Skills,
 Education, Achievements, Contact and a printable résumé sheet — reachable from
@@ -274,8 +286,10 @@ src/
                         OS shell, WindowManager, Terminal (the shell),
                         ContextMenu, Notifications, ui helpers,
                         apps/ (Browser, Timetable, SystemMonitor, Music, News,
-                        Explorer, Notepad, Paint, Minesweeper, Calculator,
-                        Settings), screen.css + desktop.css + apps.css
+                        Explorer, Notepad, Paint, Minesweeper, Wordle, Dos,
+                        Calculator, Settings, Showcase, Credits, cv.ts —
+                        the shared CV renderers),
+                        screen.css + desktop.css + apps.css
   style.css             page chrome: loader, overlay UI, workstation dock
 ```
 

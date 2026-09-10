@@ -14,7 +14,7 @@ import { setTerminalKeySound } from './Terminal';
 import { askForName, confirmAction, el, svg } from './ui';
 import { WindowManager } from './WindowManager';
 
-export type OSState = 'standby' | 'booting' | 'desktop';
+export type OSState = 'standby' | 'booting' | 'desktop' | 'halting';
 
 interface BootLine {
   text: string;
@@ -44,6 +44,19 @@ const BOOT_LINES: BootLine[] = [
   { text: 'Starting shrey-os 1.0 ...', delay: 220, className: 'boot__line--accent' },
 ];
 
+const SHUTDOWN_LINES: BootLine[] = [
+  { text: 'shrey-os: received SIGTERM', delay: 0, className: 'boot__line--bright' },
+  { text: '', delay: 60 },
+  { text: 'Stopping session manager      ... done', delay: 200 },
+  { text: 'Closing open windows          ... done', delay: 170 },
+  { text: 'Flushing /home/shrey to disk  ... done', delay: 220 },
+  { text: 'Unmounting /home/shrey        ... done', delay: 180 },
+  { text: 'Stopping telemetry bus        ... done', delay: 150 },
+  { text: 'Spinning down fans            ... done', delay: 260 },
+  { text: '', delay: 80 },
+  { text: 'System halted.', delay: 320, className: 'boot__line--accent' },
+];
+
 const MENU_ICONS = {
   newFolder: svg('<path d="M3 7.4A1.4 1.4 0 0 1 4.4 6h4.2l1.9 2.2h9.1A1.4 1.4 0 0 1 21 9.6v8A1.4 1.4 0 0 1 19.6 19H4.4A1.4 1.4 0 0 1 3 17.6z"/><path d="M12 11.5v5M9.5 14h5"/>'),
   newFile: svg('<path d="M14 3H7a1.8 1.8 0 0 0-1.8 1.8v14.4A1.8 1.8 0 0 0 7 21h10a1.8 1.8 0 0 0 1.8-1.8V8z"/><path d="M14 3v5h4.8"/>'),
@@ -52,6 +65,7 @@ const MENU_ICONS = {
   rename: svg('<path d="M4 20h16"/><path d="M14.5 4.5 19 9 9 19H4.5v-4.5z"/>'),
   search: svg('<circle cx="11" cy="11" r="6.5"/><path d="m16 16 4 4"/>'),
   power: svg('<path d="M12 4v8"/><path d="M17.7 7.3a8 8 0 1 1-11.4 0"/>'),
+  close: svg('<rect x="3.5" y="5" width="17" height="14" rx="2"/><path d="m9.5 10.5 5 5M14.5 10.5l-5 5"/>'),
   view: svg(
     '<rect x="3" y="5.5" width="13" height="9.5" rx="1.6"/>' +
       '<path d="M16 9.2 21 6.6v10.8L16 14.8z"/><path d="M6.5 19h7"/>',
@@ -300,6 +314,11 @@ export class OS {
     const hint = el('p', 'standby__hint');
     hint.innerHTML = 'PRESS ANY KEY TO BOOT<span class="caret"></span>';
     layer.append(hint);
+
+    // The room boots the machine when the camera arrives, but after a shutdown
+    // the camera is already here — so standby has to answer for itself.
+    layer.addEventListener('pointerdown', () => this.powerOn());
+
     return layer;
   }
 
@@ -465,14 +484,25 @@ export class OS {
     const list = el('div', 'start-menu__list');
     menu.append(list);
 
-    const power = el('button', 'start-menu__item start-menu__item--power');
-    power.type = 'button';
-    power.innerHTML = '<span class="start-menu__icon">' + MENU_ICONS.power + '</span>';
-    power.append(document.createTextNode('Close all windows'));
-    power.addEventListener('click', () => {
+    const closeAll = el('button', 'start-menu__item start-menu__item--power');
+    closeAll.type = 'button';
+    closeAll.innerHTML = '<span class="start-menu__icon">' + MENU_ICONS.close + '</span>';
+    closeAll.append(document.createTextNode('Close all windows'));
+    closeAll.addEventListener('click', () => {
       this.audio.click();
       this.startMenu.classList.remove('is-open');
       this.manager.closeAll();
+    });
+    menu.append(closeAll);
+
+    const power = el('button', 'start-menu__item start-menu__item--power');
+    power.type = 'button';
+    power.innerHTML = '<span class="start-menu__icon">' + MENU_ICONS.power + '</span>';
+    power.append(document.createTextNode('Shut down'));
+    power.addEventListener('click', () => {
+      this.audio.click();
+      this.startMenu.classList.remove('is-open');
+      this.shutDown();
     });
     menu.append(power);
 
@@ -687,6 +717,11 @@ export class OS {
 
   private bindShortcuts() {
     this.root.addEventListener('keydown', (event) => {
+      if (this.state === 'standby') {
+        this.powerOn();
+        return;
+      }
+
       if (this.state !== 'desktop') return;
       const focused = this.manager.focusedId;
 
@@ -764,6 +799,62 @@ export class OS {
         this.manager.open(appsById.get('about')!);
         notify('Welcome', 'Right-click the desktop, or open the Terminal.');
       }, elapsed + 620),
+    );
+  }
+
+  /**
+   * Shut the machine down: play the halt log, then drop back to standby, where
+   * any key boots it again. The boot layer is reused for the log — it is the
+   * same teletype surface, and a halt reads like a boot in reverse.
+   */
+  shutDown() {
+    if (this.state !== 'desktop') return;
+    this.state = 'halting';
+
+    this.closeMenus();
+    this.manager.closeAll();
+    this.audio.degauss();
+
+    this.root.classList.add('is-switching');
+
+    this.timers.push(
+      window.setTimeout(() => {
+        this.root.classList.remove('is-switching');
+        this.desktop.classList.remove('is-visible');
+        this.boot.classList.add('is-visible');
+        this.boot.replaceChildren();
+        this.brightness = 0.55;
+      }, 260),
+    );
+
+    let elapsed = 320;
+    for (const entry of SHUTDOWN_LINES) {
+      elapsed += entry.delay;
+      this.timers.push(
+        window.setTimeout(() => {
+          const line = el('div', 'boot__line' + (entry.className ? ' ' + entry.className : ''));
+          line.textContent = entry.text === '' ? ' ' : entry.text;
+          this.boot.append(line);
+          this.boot.scrollTop = this.boot.scrollHeight;
+        }, elapsed),
+      );
+    }
+
+    this.timers.push(
+      window.setTimeout(() => this.root.classList.add('is-switching'), elapsed + 520),
+    );
+
+    this.timers.push(
+      window.setTimeout(() => {
+        this.root.classList.remove('is-switching');
+        this.boot.classList.remove('is-visible');
+        this.standby.classList.add('is-visible');
+        this.state = 'standby';
+        this.brightness = 0.18;
+
+        window.clearInterval(this.clockTimer);
+        telemetry.setPowered(false);
+      }, elapsed + 720),
     );
   }
 

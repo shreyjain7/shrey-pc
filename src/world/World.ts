@@ -15,6 +15,8 @@ import { Dust } from './Dust';
 import { Monitor } from './Monitor';
 import { Peripherals } from './Peripherals';
 import { Room } from './Room';
+import { CASE, Tower } from './Tower';
+import { TOWER } from './layout';
 
 export interface BuildStep {
   name: string;
@@ -29,7 +31,9 @@ export interface BuildStep {
  */
 export class World {
   monitor!: Monitor;
+  tower!: Tower;
 
+  private peripherals!: Peripherals;
   private dust!: Dust;
   private readonly raycaster = new Raycaster();
   private readonly pointer = new Vector2();
@@ -42,6 +46,7 @@ export class World {
     private sizes: Sizes,
     private screenElement: HTMLElement,
     private onMonitorClick: () => void,
+    private onTowerClick: () => void = () => {},
   ) {
     window.addEventListener('pointerdown', this.onPointerDown);
     window.addEventListener('pointerup', this.onPointerUp);
@@ -79,7 +84,23 @@ export class World {
       {
         name: 'peripherals.geo',
         run: () => {
-          this.scene.add(new Peripherals(quality).group);
+          this.peripherals = new Peripherals(quality);
+          this.scene.add(this.peripherals.group);
+        },
+      },
+      {
+        name: 'tower.assembly',
+        run: () => {
+          this.tower = new Tower(quality);
+          // The tower's geometry is centred on its own origin, so it has to
+          // be lifted by half its height to stand on the desk.
+          this.tower.group.position.set(
+            TOWER.position.x,
+            TOWER.position.y + CASE.height / 2,
+            TOWER.position.z,
+          );
+          this.tower.group.rotation.y = TOWER.rotationY;
+          this.scene.add(this.tower.group);
         },
       },
       {
@@ -119,6 +140,8 @@ export class World {
 
   update(delta: number, elapsed: number) {
     this.dust?.update(delta, elapsed);
+    this.tower?.update(delta);
+    this.peripherals?.update(delta);
   }
 
   private setPointer(event: PointerEvent) {
@@ -131,6 +154,13 @@ export class World {
     this.setPointer(event);
     this.raycaster.setFromCamera(this.pointer, this.camera.instance);
     return this.raycaster.intersectObjects(this.monitor.hitboxes, false).length > 0;
+  }
+
+  private hitsTower(event: PointerEvent) {
+    if (!this.tower) return false;
+    this.setPointer(event);
+    this.raycaster.setFromCamera(this.pointer, this.camera.instance);
+    return this.raycaster.intersectObjects(this.tower.hitboxes, false).length > 0;
   }
 
   private onPointerDown = (event: PointerEvent) => {
@@ -146,7 +176,12 @@ export class World {
     const travelled = Math.hypot(event.clientX - down.x, event.clientY - down.y);
     if (travelled > 10) return;
 
-    if (this.hitsMonitor(event)) this.onMonitorClick();
+    if (this.hitsMonitor(event)) {
+      this.onMonitorClick();
+      return;
+    }
+    // Clicking the case is how you get a closer look at it.
+    if (this.hitsTower(event)) this.onTowerClick();
   };
 
   private onPointerMove = (event: PointerEvent) => {
@@ -161,7 +196,7 @@ export class World {
       return;
     }
 
-    const hit = this.hitsMonitor(event);
+    const hit = this.hitsMonitor(event) || this.hitsTower(event);
     if (hit === this.hovering) return;
     this.hovering = hit;
     document.body.classList.toggle('is-hovering-monitor', hit);

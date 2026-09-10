@@ -10,7 +10,12 @@ import {
   type Entry,
 } from '../data/cv';
 import { createTerminal } from './Terminal';
+import { createBrowser } from './apps/Browser';
 import { createExplorer } from './apps/Explorer';
+import { createMusic } from './apps/Music';
+import { createNews } from './apps/News';
+import { createSystemMonitor } from './apps/SystemMonitor';
+import { createTimetable } from './apps/Timetable';
 import { createNotepad } from './apps/Notepad';
 import { createCalculator } from './apps/Calculator';
 import { createMinesweeper } from './apps/Minesweeper';
@@ -60,6 +65,23 @@ export const icons = {
   calculator: svg('<rect x="5" y="3" width="14" height="18" rx="2"/><path d="M8.5 7.5h7"/><path d="M9 12h.01M12 12h.01M15 12h.01M9 16h.01M12 16h.01M15 16h.01"/>'),
   minesweeper: svg('<circle cx="12" cy="13" r="5.6"/><path d="M12 4v2.4M4.8 7.2l1.9 1.9M19.2 7.2l-1.9 1.9"/>'),
   paint: svg('<circle cx="12" cy="12" r="8.5"/><circle cx="9.4" cy="9.8" r="1.1" fill="currentColor"/><circle cx="14.6" cy="9.8" r="1.1" fill="currentColor"/><circle cx="15.6" cy="14.2" r="1.1" fill="currentColor"/>'),
+  browser: svg(
+    '<circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17"/>' +
+      '<path d="M12 3.5a13 13 0 0 1 0 17"/><path d="M12 3.5a13 13 0 0 0 0 17"/>',
+  ),
+  timetable: svg(
+    '<rect x="3.5" y="5" width="17" height="15" rx="2"/><path d="M3.5 10h17"/>' +
+      '<path d="M8 3.5v3M16 3.5v3"/><path d="M8.5 13.5h3M8.5 16.5h7"/>',
+  ),
+  sysmon: svg(
+    '<rect x="3.5" y="5.5" width="17" height="13" rx="2"/>' +
+      '<path d="m6.5 13.5 2.5-3 2.4 3.4L14 9l3.5 6"/>',
+  ),
+  music: svg('<path d="M9 17.5V6.2l10-2v11.1"/><circle cx="6.6" cy="17.6" r="2.4"/><circle cx="16.6" cy="15.3" r="2.4"/>'),
+  news: svg(
+    '<path d="M4 5.5h12.5v13H6A2 2 0 0 1 4 16.5z"/><path d="M16.5 9H20v7.5a2 2 0 0 1-4 0z"/>' +
+      '<path d="M6.8 8.6h6.6M6.8 12h6.6M6.8 15.2h4"/>',
+  ),
   settings: svg('<circle cx="12" cy="12" r="3"/><path d="M19.4 14.5a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-2.7 1.1v.3a2 2 0 1 1-4 0v-.2a1.6 1.6 0 0 0-2.8-1.1l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0-1.1-2.7H3a2 2 0 1 1 0-4h.2a1.6 1.6 0 0 0 1.1-2.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.6 1.6 0 0 0 2.7-1.1V3a2 2 0 1 1 4 0v.2a1.6 1.6 0 0 0 2.8 1.1l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0 1.1 2.7h.3a2 2 0 1 1 0 4h-.2a1.6 1.6 0 0 0-1.5 1z"/>'),
 };
 
@@ -329,6 +351,46 @@ export const apps: AppDefinition[] = [
     width: 600,
     height: 420,
     render: renderContact,
+  },
+  {
+    id: 'browser',
+    title: 'Aperture',
+    icon: icons.browser,
+    width: 940,
+    height: 680,
+    render: createBrowser,
+  },
+  {
+    id: 'timetable',
+    title: 'Timetable',
+    icon: icons.timetable,
+    width: 900,
+    height: 640,
+    render: createTimetable,
+  },
+  {
+    id: 'sysmon',
+    title: 'System Monitor',
+    icon: icons.sysmon,
+    width: 900,
+    height: 600,
+    render: createSystemMonitor,
+  },
+  {
+    id: 'music',
+    title: 'Player',
+    icon: icons.music,
+    width: 520,
+    height: 620,
+    render: createMusic,
+  },
+  {
+    id: 'news',
+    title: 'Wire',
+    icon: icons.news,
+    width: 760,
+    height: 620,
+    render: createNews,
   },
   {
     id: 'terminal',

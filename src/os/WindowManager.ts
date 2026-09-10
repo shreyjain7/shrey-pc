@@ -1,3 +1,5 @@
+import { SPRING, Spring, ease, reducedMotion, ticker, tween } from './anim';
+import { telemetry } from '../world/telemetry';
 
 export interface AppDefinition {
   id: string;
@@ -7,6 +9,24 @@ export interface AppDefinition {
   width: number;
   height: number;
   render: () => HTMLElement;
+  /**
+   * Roughly how heavy this app is, 0..1. Reported to the telemetry bus when it
+   * opens, so the fans in the tower react to launching the browser differently
+   * from launching the calculator.
+   */
+  weight?: number;
+}
+
+/** The transform channels a window animates on, kept apart from its layout. */
+interface Motion {
+  scale: Spring;
+  x: Spring;
+  y: Spring;
+  tilt: Spring;
+  opacity: number;
+  /** Pointer parallax, folded into the same transform as everything else. */
+  px: number;
+  py: number;
 }
 
 interface ManagedWindow {
@@ -18,10 +38,14 @@ interface ManagedWindow {
   maximised: boolean;
   /** Geometry remembered while maximised, so restore puts it back. */
   restore: { x: number; y: number; width: number; height: number } | null;
+  motion: Motion;
 }
 
 const TASKBAR_HEIGHT = 56;
 const CASCADE_STEP = 34;
+
+/** Lower bound wins when the box is smaller than the window plus its margins. */
+const clamp = (value: number, min: number, max: number) => Math.max(Math.min(value, max), min);
 
 /**
  * A small floating-window manager living inside the CRT.
@@ -29,6 +53,11 @@ const CASCADE_STEP = 34;
  * Everything is positioned in the screen's own 1280x960 coordinate space. The
  * CSS3D layer scales that whole space down onto the glass, so drags have to be
  * divided by the live scale factor to track the pointer exactly.
+ *
+ * Motion is spring-driven rather than transitioned. Layout (left/top/width/
+ * height) and animation (transform/opacity) are kept on separate channels, so
+ * a window can be dragged while it is still settling from being opened, and
+ * minimising can genie toward a taskbar button that is itself still moving.
  */
 export class WindowManager {
   private windows = new Map<string, ManagedWindow>();
@@ -36,6 +65,8 @@ export class WindowManager {
   private cascade = 0;
 
   private onChange: () => void = () => {};
+  /** Where a window should fly to when it minimises, in screen coordinates. */
+  private taskbarAnchor: (id: string) => { x: number; y: number } | null = () => null;
   /** Narrow screens run one full-bleed window at a time. */
   private compact = false;
 
@@ -47,6 +78,53 @@ export class WindowManager {
 
   setCompact(compact: boolean) {
     this.compact = compact;
+  }
+
+  /**
+   * Re-fit every open window into the current screen box.
+   *
+   * The box changes underneath the windows whenever the OS moves between the
+   * glass (a fixed 1280x960) and an overlay sized to the viewport or the
+   * workstation dock. Without this, a window opened at one size is simply
+   * clipped by the other.
+   */
+  relayout() {
+    const box = this.box;
+    const maxHeight = box.height - TASKBAR_HEIGHT;
+
+    for (const entry of this.windows.values()) {
+      if (entry.maximised) {
+        entry.root.style.left = '0px';
+        entry.root.style.top = '0px';
+        entry.root.style.width = box.width + 'px';
+        entry.root.style.height = maxHeight + 'px';
+        continue;
+      }
+
+      if (this.compact) {
+        entry.root.style.left = '12px';
+        entry.root.style.top = '12px';
+        entry.root.style.width = box.width - 24 + 'px';
+        entry.root.style.height = maxHeight - 24 + 'px';
+        continue;
+      }
+
+      // Prefer the app's natural size again when the box has grown, so
+      // stepping back to the glass does not leave everything phone-sized.
+      const width = Math.min(Math.max(entry.app.width, 280), box.width - 32);
+      const height = Math.min(Math.max(entry.app.height, 180), maxHeight - 32);
+      const left = clamp(entry.root.offsetLeft, 16, Math.max(16, box.width - width - 16));
+      const top = clamp(entry.root.offsetTop, 16, Math.max(16, maxHeight - height - 16));
+
+      entry.root.style.width = width + 'px';
+      entry.root.style.height = height + 'px';
+      entry.root.style.left = left + 'px';
+      entry.root.style.top = top + 'px';
+    }
+  }
+
+  setTaskbarAnchor(resolve: (id: string) => { x: number; y: number } | null) {
+    this.taskbarAnchor = resolve;
   }
 
   /**
@@ -73,6 +151,11 @@ export class WindowManager {
     return this.windows.get(id)?.minimised ?? false;
   }
 
+  /** App ids currently running, oldest first — the process list reads this. */
+  get running() {
+    return [...this.windows.keys()];
+  }
+
   get focusedId(): string | null {
     for (let i = this.order.length - 1; i >= 0; i -= 1) {
       const entry = this.windows.get(this.order[i]);
@@ -80,6 +163,58 @@ export class WindowManager {
     }
     return null;
   }
+
+  /* ---------------------------------------------------------------------- */
+  /* Motion                                                                  */
+  /* ---------------------------------------------------------------------- */
+
+  /**
+   * One writer for the transform.
+   *
+   * Four independent springs feed a single `transform` string. Composing them
+   * here rather than letting each spring write its own property is what stops
+   * the last one to settle from clobbering the others.
+   */
+  private applyTransform(entry: ManagedWindow) {
+    const { scale, x, y, tilt, px, py } = entry.motion;
+    entry.root.style.transform =
+      `translate3d(${(x.value + px).toFixed(2)}px, ${(y.value + py).toFixed(2)}px, 0) ` +
+      `scale(${scale.value.toFixed(4)}) rotate(${tilt.value.toFixed(3)}deg)`;
+    entry.root.style.opacity = entry.motion.opacity.toFixed(3);
+  }
+
+  private createMotion(entry: () => ManagedWindow): Motion {
+    const write = () => {
+      const target = entry();
+      if (target) this.applyTransform(target);
+    };
+
+    return {
+      scale: new Spring(1, { ...SPRING.window, onUpdate: write }),
+      x: new Spring(0, { ...SPRING.window, onUpdate: write }),
+      y: new Spring(0, { ...SPRING.window, onUpdate: write }),
+      tilt: new Spring(0, { ...SPRING.bounce, onUpdate: write }),
+      opacity: 1,
+      px: 0,
+      py: 0,
+    };
+  }
+
+  private fade(entry: ManagedWindow, to: number, duration: number) {
+    const from = entry.motion.opacity;
+    return tween(
+      duration,
+      (t) => {
+        entry.motion.opacity = from + (to - from) * t;
+        this.applyTransform(entry);
+      },
+      ease.outCubic,
+    );
+  }
+
+  /* ---------------------------------------------------------------------- */
+  /* Lifecycle                                                               */
+  /* ---------------------------------------------------------------------- */
 
   /** Opens the app, or focuses/minimises it when it is already running. */
   toggle(app: AppDefinition) {
@@ -89,8 +224,7 @@ export class WindowManager {
       return;
     }
     if (existing.minimised || this.focusedId !== app.id) {
-      existing.minimised = false;
-      existing.root.classList.remove('is-minimised');
+      this.restoreFrom(existing);
       this.focus(app.id);
     } else {
       this.minimise(app.id);
@@ -100,8 +234,7 @@ export class WindowManager {
   open(app: AppDefinition) {
     if (this.windows.has(app.id)) {
       const existing = this.windows.get(app.id)!;
-      existing.minimised = false;
-      existing.root.classList.remove('is-minimised');
+      this.restoreFrom(existing);
       this.focus(app.id);
       return;
     }
@@ -118,19 +251,26 @@ export class WindowManager {
     // Cascade down and right, wrapping before windows walk off the screen.
     const offset = this.compact ? 0 : (this.cascade % 5) * CASCADE_STEP;
     this.cascade += 1;
+    // Clamped on both sides: the cascade must never walk a window off the
+    // right or bottom edge, which it will on a narrow box such as the
+    // workstation dock.
     const x = this.compact
       ? 12
-      : Math.round((box.width - width) / 2 - 60 + offset);
+      : clamp(Math.round((box.width - width) / 2 - 60 + offset), 16, box.width - width - 16);
     const y = this.compact
       ? 12
-      : Math.round((box.height - TASKBAR_HEIGHT - height) / 2 - 40 + offset);
+      : clamp(
+          Math.round((box.height - TASKBAR_HEIGHT - height) / 2 - 40 + offset),
+          16,
+          box.height - TASKBAR_HEIGHT - height - 16,
+        );
 
     const root = document.createElement('section');
     root.className = 'win';
     root.style.width = width + 'px';
     root.style.height = height + 'px';
-    root.style.left = Math.max(16, x) + 'px';
-    root.style.top = Math.max(16, y) + 'px';
+    root.style.left = x + 'px';
+    root.style.top = y + 'px';
 
     const bar = document.createElement('header');
     bar.className = 'win__bar';
@@ -178,7 +318,10 @@ export class WindowManager {
       minimised: false,
       maximised: false,
       restore: null,
+      motion: null as unknown as Motion,
     };
+    entry.motion = this.createMotion(() => entry);
+
     this.windows.set(app.id, entry);
     this.order.push(app.id);
 
@@ -187,8 +330,22 @@ export class WindowManager {
     this.makeDraggable(entry, bar);
     if (!this.compact) this.makeResizable(entry, grips);
 
-    // Let the opening animation start from a clean frame.
-    requestAnimationFrame(() => root.classList.add('is-open'));
+    // Grow in from just under full size, with the faintest overshoot.
+    entry.motion.opacity = 0;
+    entry.motion.scale.set(0.9);
+    entry.motion.y.set(18);
+    this.applyTransform(entry);
+
+    requestAnimationFrame(() => {
+      root.classList.add('is-open');
+      entry.motion.scale.to(1);
+      entry.motion.y.to(0);
+      void this.fade(entry, 1, reducedMotion ? 0 : 220);
+    });
+
+    // Tell the hardware something just started.
+    telemetry.process(app.weight ?? 0.2);
+    telemetry.diskActivity(0.5);
 
     this.focus(app.id);
   }
@@ -222,17 +379,28 @@ export class WindowManager {
     let originX = 0;
     let originY = 0;
     let scale = 1;
+    /** Pointer velocity in screen px/s, for the release flick. */
+    let velocity = 0;
+    let lastX = 0;
+    let lastTime = 0;
 
     handle.addEventListener('pointerdown', (event) => {
       if (event.button !== 0 || entry.maximised) return;
       pointerId = event.pointerId;
       startX = event.clientX;
       startY = event.clientY;
+      lastX = event.clientX;
+      lastTime = event.timeStamp;
+      velocity = 0;
       originX = entry.root.offsetLeft;
       originY = entry.root.offsetTop;
       scale = this.currentScale();
       handle.setPointerCapture(event.pointerId);
       entry.root.classList.add('is-dragging');
+      // Springs have to let go of the transform while the pointer owns it.
+      entry.motion.x.set(0);
+      entry.motion.y.set(0);
+      entry.motion.scale.to(1.012);
     });
 
     handle.addEventListener('pointermove', (event) => {
@@ -249,6 +417,14 @@ export class WindowManager {
 
       entry.root.style.left = Math.round(x) + 'px';
       entry.root.style.top = Math.round(y) + 'px';
+
+      const elapsed = Math.max(event.timeStamp - lastTime, 1);
+      velocity = ((event.clientX - lastX) / scale / elapsed) * 1000;
+      lastX = event.clientX;
+      lastTime = event.timeStamp;
+
+      // Lean into the drag, like a window being carried.
+      entry.motion.tilt.to(Math.max(Math.min(velocity * 0.006, 2.4), -2.4));
     });
 
     const end = (event: PointerEvent) => {
@@ -256,6 +432,11 @@ export class WindowManager {
       pointerId = null;
       handle.releasePointerCapture(event.pointerId);
       entry.root.classList.remove('is-dragging');
+
+      entry.motion.scale.to(1);
+      entry.motion.tilt.to(0);
+      // Let go and the window rocks back — velocity carried into the spring.
+      entry.motion.tilt.impulse(Math.max(Math.min(velocity * 0.02, 24), -24));
     };
 
     handle.addEventListener('pointerup', end);
@@ -334,7 +515,13 @@ export class WindowManager {
     }
   }
 
-  /** Half-screen and full-screen snapping, by edge or by keyboard. */
+  /**
+   * Half-screen and full-screen snapping, by edge or by keyboard.
+   *
+   * The geometry is set immediately and the *difference* is played back as a
+   * transform, so the window appears to slide into the new shape while its
+   * content has already reflowed to the final size.
+   */
   snap(id: string, edge: 'left' | 'right' | 'top') {
     const entry = this.windows.get(id);
     if (!entry || this.compact) return;
@@ -348,10 +535,20 @@ export class WindowManager {
     }
 
     if (entry.maximised) this.toggleMaximise(id);
+
+    const fromX = entry.root.offsetLeft;
+    const fromY = entry.root.offsetTop;
+
     entry.root.style.top = '0px';
     entry.root.style.left = (edge === 'left' ? 0 : Math.round(box.width / 2)) + 'px';
     entry.root.style.width = Math.round(box.width / 2) + 'px';
     entry.root.style.height = height + 'px';
+
+    entry.motion.x.set(fromX - entry.root.offsetLeft);
+    entry.motion.y.set(fromY - entry.root.offsetTop);
+    entry.motion.x.to(0);
+    entry.motion.y.to(0);
+
     this.focus(id);
   }
 
@@ -385,6 +582,11 @@ export class WindowManager {
     this.onChange();
   }
 
+  /**
+   * The genie: shrink toward the app's own taskbar button rather than just
+   * fading. The anchor is asked for at the moment of minimising, so a button
+   * that has shifted because another window closed is still landed on.
+   */
   minimise(id: string) {
     const entry = this.windows.get(id);
     if (!entry) return;
@@ -392,14 +594,41 @@ export class WindowManager {
     entry.root.classList.add('is-minimised');
     entry.root.classList.remove('is-focused');
 
+    const anchor = this.taskbarAnchor(id);
+    if (anchor) {
+      const centreX = entry.root.offsetLeft + entry.root.offsetWidth / 2;
+      const centreY = entry.root.offsetTop + entry.root.offsetHeight / 2;
+      entry.motion.x.to(anchor.x - centreX);
+      entry.motion.y.to(anchor.y - centreY);
+    } else {
+      entry.motion.y.to(entry.root.offsetHeight * 0.4);
+    }
+    entry.motion.scale.to(0.16);
+    void this.fade(entry, 0, reducedMotion ? 0 : 200);
+
     const next = this.focusedId;
     if (next) this.focus(next);
     this.onChange();
   }
 
+  private restoreFrom(entry: ManagedWindow) {
+    if (!entry.minimised) return;
+    entry.minimised = false;
+    entry.root.classList.remove('is-minimised');
+    entry.motion.x.to(0);
+    entry.motion.y.to(0);
+    entry.motion.scale.to(1);
+    void this.fade(entry, 1, reducedMotion ? 0 : 200);
+  }
+
   toggleMaximise(id: string) {
     const entry = this.windows.get(id);
     if (!entry) return;
+
+    const fromX = entry.root.offsetLeft;
+    const fromY = entry.root.offsetTop;
+    const fromW = entry.root.offsetWidth;
+    const fromH = entry.root.offsetHeight;
 
     if (entry.maximised && entry.restore) {
       const { x, y, width, height } = entry.restore;
@@ -411,12 +640,7 @@ export class WindowManager {
       entry.restore = null;
       entry.root.classList.remove('is-maximised');
     } else {
-      entry.restore = {
-        x: entry.root.offsetLeft,
-        y: entry.root.offsetTop,
-        width: entry.root.offsetWidth,
-        height: entry.root.offsetHeight,
-      };
+      entry.restore = { x: fromX, y: fromY, width: fromW, height: fromH };
       const box = this.box;
       entry.root.style.left = '0px';
       entry.root.style.top = '0px';
@@ -425,6 +649,12 @@ export class WindowManager {
       entry.maximised = true;
       entry.root.classList.add('is-maximised');
     }
+
+    // Same trick as snapping: reflow first, then play back the difference.
+    entry.motion.x.set(fromX - entry.root.offsetLeft);
+    entry.motion.y.set(fromY - entry.root.offsetTop);
+    entry.motion.x.to(0);
+    entry.motion.y.to(0);
 
     this.focus(id);
   }
@@ -438,9 +668,18 @@ export class WindowManager {
     this.windows.delete(id);
     this.order = this.order.filter((entryId) => entryId !== id);
 
-    // Let the app tear down timers and listeners before the DOM goes.
-    entry.content.dispatchEvent(new CustomEvent('app:destroy'));
-    window.setTimeout(() => entry.root.remove(), 180);
+    entry.motion.scale.to(0.92);
+    entry.motion.y.to(10);
+    void this.fade(entry, 0, reducedMotion ? 0 : 170).then(() => {
+      // Let the app tear down timers and listeners before the DOM goes.
+      entry.content.dispatchEvent(new CustomEvent('app:destroy'));
+      for (const spring of [entry.motion.scale, entry.motion.x, entry.motion.y, entry.motion.tilt]) {
+        spring.cancel();
+      }
+      entry.root.remove();
+    });
+
+    telemetry.diskActivity(0.3);
 
     const next = this.focusedId;
     if (next) this.focus(next);
@@ -448,7 +687,72 @@ export class WindowManager {
   }
 
   closeAll() {
-    for (const id of [...this.windows.keys()]) this.close(id);
+    // Stagger the closes so a full desktop cascades away instead of blinking.
+    const ids = [...this.windows.keys()].reverse();
+    ids.forEach((id, index) => {
+      if (reducedMotion || index === 0) {
+        this.close(id);
+        return;
+      }
+      window.setTimeout(() => this.close(id), index * 55);
+    });
     this.cascade = 0;
+  }
+
+  /**
+   * Nudge every window slightly away from the pointer's side of the screen.
+   * A tiny parallax, but it is what makes the desktop feel like it has depth
+   * when it is projected onto curved glass.
+   */
+  bindParallax(host: HTMLElement) {
+    let targetX = 0;
+    let targetY = 0;
+    let currentX = 0;
+    let currentY = 0;
+    let stop: (() => void) | null = null;
+
+    /*
+     * These transforms land on elements inside the CSS3D layer, where every
+     * write re-rasters the projected surface. So the loop is not permanent:
+     * it starts when the pointer moves and retires itself once the offsets
+     * have caught up, which is most of the time.
+     */
+    const run = () => {
+      if (stop) return;
+      stop = ticker((delta) => {
+        const lambda = 1 - Math.exp(-3 * delta);
+        currentX += (targetX - currentX) * lambda;
+        currentY += (targetY - currentY) * lambda;
+
+        for (const entry of this.windows.values()) {
+          const rest = entry.maximised || entry.minimised;
+          const depth = (Number(entry.root.style.zIndex) || 10) - 10;
+          // Windows further forward in the stack shift further.
+          const weight = 0.5 + Math.min(depth, 6) * 0.28;
+          entry.motion.px = rest ? 0 : -currentX * weight;
+          entry.motion.py = rest ? 0 : -currentY * weight;
+          this.applyTransform(entry);
+        }
+
+        const settled =
+          Math.abs(targetX - currentX) < 0.004 && Math.abs(targetY - currentY) < 0.004;
+        if (!settled) return true;
+
+        currentX = targetX;
+        currentY = targetY;
+        stop = null;
+        return false;
+      });
+    };
+
+    host.addEventListener('pointermove', (event) => {
+      const box = host.getBoundingClientRect();
+      if (!box.width || !box.height) return;
+      targetX = ((event.clientX - box.left) / box.width - 0.5) * 2;
+      targetY = ((event.clientY - box.top) / box.height - 0.5) * 2;
+      run();
+    });
+
+    return () => stop?.();
   }
 }

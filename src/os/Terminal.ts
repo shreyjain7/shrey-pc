@@ -1,4 +1,13 @@
 import { profile, skills } from '../data/cv';
+import {
+  attendanceView,
+  classesOn,
+  dayIdFor,
+  formatTime,
+  overallAttendance,
+  semester,
+} from '../data/timetable';
+import { describeNextClass } from './apps/Timetable';
 import { basename, dirname, fs, HOME, join, normalise, type FsNode } from './fs';
 import { openApp, openPath } from './system';
 import { el } from './ui';
@@ -30,7 +39,8 @@ interface Command {
 const APPS = [
   'about', 'projects', 'experience', 'skills', 'education', 'achievements',
   'resume', 'contact', 'explorer', 'notepad', 'calculator', 'minesweeper',
-  'paint', 'settings', 'terminal',
+  'paint', 'settings', 'terminal', 'browser', 'timetable', 'sysmon', 'music',
+  'news',
 ];
 
 function resolve(ctx: Context, arg: string | undefined, fallback?: string) {
@@ -356,6 +366,64 @@ const commands: Record<string, Command> = {
       info.forEach(([key, value], index) => {
         print(pad(art[index] ?? '', 16) + pad(key, 9) + ' ' + value);
       });
+    },
+  },
+
+  next: {
+    usage: 'next',
+    summary: 'the class you are in, or the one after it',
+    run: ({ print }) => print(describeNextClass(), 'out--accent'),
+  },
+
+  today: {
+    usage: 'today',
+    summary: "today's classes",
+    run: ({ print }) => {
+      const day = dayIdFor(new Date());
+      if (!day) {
+        print('Sunday — nothing scheduled.', 'out--dim');
+        return;
+      }
+
+      const classes = classesOn(day);
+      if (!classes.length) {
+        print('Nothing timetabled today.', 'out--dim');
+        return;
+      }
+
+      for (const entry of classes) {
+        const time = `${formatTime(entry.period.start, true)}-${formatTime(entry.period.end, true)}`;
+        const kind = entry.slot.kind === 'lecture' ? '' : ' [' + entry.slot.kind.toUpperCase() + ']';
+        print(pad(time, 14) + pad(entry.subject.short, 7) + pad(entry.slot.room ?? '', 9) + entry.subject.faculty + kind);
+      }
+    },
+  },
+
+  attendance: {
+    usage: 'attendance',
+    summary: 'the ledger, and how many you can still miss',
+    run: ({ print }) => {
+      const overall = overallAttendance();
+      print(pad('SUBJECT', 8) + pad('SEEN', 10) + pad('PCT', 8) + 'VERDICT');
+
+      for (const view of attendanceView()) {
+        const verdict = view.safe
+          ? `can miss ${view.canSkip} more`
+          : `attend ${view.mustAttend} in a row`;
+        print(
+          pad(view.subject.short, 8) +
+            pad(`${view.attended}/${view.held}`, 10) +
+            pad(view.percent.toFixed(1) + '%', 8) +
+            verdict,
+          view.safe ? undefined : 'out--warn',
+        );
+      }
+
+      print('');
+      print(
+        `Overall ${overall.percent.toFixed(1)}% — minimum ${semester.minimumAttendance}%`,
+        overall.percent >= semester.minimumAttendance ? 'out--accent' : 'out--warn',
+      );
     },
   },
 

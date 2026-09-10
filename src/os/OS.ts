@@ -1,13 +1,15 @@
 import type { Audio } from '../experience/Audio';
 import type { Sizes } from '../experience/Sizes';
 import { profile } from '../data/cv';
+import { telemetry } from '../world/telemetry';
+import { SPRING, Spring } from './anim';
 import { apps, appsById, icons } from './apps';
 import { fileIcon } from './apps/Explorer';
 import { closeContextMenu, openContextMenu } from './ContextMenu';
 import { basename, fs, HOME, join } from './fs';
 import { mountNotifications, notify } from './Notifications';
 import { settings } from './settings';
-import { openPath, registerSystem } from './system';
+import { openPath, registerSystem, setRoomView } from './system';
 import { setTerminalKeySound } from './Terminal';
 import { askForName, confirmAction, el, svg } from './ui';
 import { WindowManager } from './WindowManager';
@@ -50,6 +52,10 @@ const MENU_ICONS = {
   rename: svg('<path d="M4 20h16"/><path d="M14.5 4.5 19 9 9 19H4.5v-4.5z"/>'),
   search: svg('<circle cx="11" cy="11" r="6.5"/><path d="m16 16 4 4"/>'),
   power: svg('<path d="M12 4v8"/><path d="M17.7 7.3a8 8 0 1 1-11.4 0"/>'),
+  view: svg(
+    '<rect x="3" y="5.5" width="13" height="9.5" rx="1.6"/>' +
+      '<path d="M16 9.2 21 6.6v10.8L16 14.8z"/><path d="M6.5 19h7"/>',
+  ),
   sound: svg('<path d="M11 5 6.5 8.8H3.4v6.4h3.1L11 19z"/><path d="M15.4 9.2a4 4 0 0 1 0 5.6"/>'),
 };
 
@@ -83,6 +89,10 @@ export class OS {
   private timers: number[] = [];
   private clockTimer = 0;
   private ramTimer = 0;
+  private stopMotion: Array<() => void> = [];
+  /** Which room camera the shell believes it is being viewed from. */
+  private view: 'room' | 'workstation' | 'screen' = 'screen';
+  private viewButton!: HTMLButtonElement;
 
   constructor(
     private audio: Audio,
@@ -130,6 +140,9 @@ export class OS {
 
     this.manager = new WindowManager(this.windowLayer, this.root, () => this.audio.click());
     this.manager.setOnChange(() => this.syncTaskbar());
+    // Minimising genies toward the app's own taskbar button, so the manager
+    // needs to be able to ask where that button currently is.
+    this.manager.setTaskbarAnchor((id) => this.taskbarAnchor(id));
 
     this.applyLayout(sizes);
     sizes.on(() => this.applyLayout(sizes));
@@ -145,19 +158,127 @@ export class OS {
 
     setTerminalKeySound(() => {
       if (settings.state.keySounds) this.audio.key();
+      telemetry.key();
     });
 
-    fs.on(() => this.renderIcons());
+    // Any keystroke anywhere in the OS lights a keycap out on the desk and
+    // nudges the CPU load, whether it landed in the shell or in Notepad.
+    this.root.addEventListener('keydown', (event) => {
+      if (event.key.length === 1 || event.key === 'Backspace' || event.key === 'Enter') {
+        telemetry.key();
+      }
+    });
+
+    fs.on(() => {
+      this.renderIcons();
+      // Every write to the virtual disk blinks the drive LED on the tower.
+      telemetry.diskActivity();
+    });
     settings.on(() => this.tickClock());
 
     this.bindDesktop();
     this.bindShortcuts();
+    this.bindPointer();
     this.renderIcons();
+
+    this.stopMotion.push(this.manager.bindParallax(this.desktop));
   }
 
   private applyLayout(sizes: Sizes) {
     this.root.classList.toggle('is-compact', sizes.compact);
     this.manager.setCompact(sizes.compact);
+    this.manager.relayout();
+  }
+
+  /**
+   * The cursor halo and the click ripples.
+   *
+   * The real pointer is the browser's, drawn by the compositor on top of
+   * everything — but a soft light that lags a few frames behind it, and a
+   * ripple where you click, are what make a desktop projected onto curved
+   * glass feel like it is being touched rather than watched.
+   *
+   * The same pointer stream is normalised and pushed onto the telemetry bus,
+   * where it drives the physical mouse sliding around the mousepad out in the
+   * 3D room.
+   */
+  private bindPointer() {
+    const halo = el('div', 'cursor-halo');
+    this.root.append(halo);
+
+    let targetX = 0;
+    let targetY = 0;
+
+    // The halo sits inside the CSS3D layer, so every transform written to it
+    // re-rasters the whole projected surface. Driving it from the springs'
+    // own updates rather than a standing ticker means it writes only while it
+    // is actually moving, and goes completely silent when the pointer stops.
+    const write = () => {
+      halo.style.transform = `translate3d(${haloX.value.toFixed(1)}px, ${haloY.value.toFixed(1)}px, 0)`;
+      // It trails the pointer; brighten it the further behind it has fallen.
+      const lag = Math.hypot(targetX - haloX.value, targetY - haloY.value);
+      halo.style.opacity = String(Math.min(0.16 + lag * 0.02, 0.5));
+    };
+
+    const haloX = new Spring(0, { ...SPRING.pointer, onUpdate: write });
+    const haloY = new Spring(0, { ...SPRING.pointer, onUpdate: write });
+
+    this.root.addEventListener('pointermove', (event) => {
+      const point = this.localPoint(event);
+      targetX = point.x;
+      targetY = point.y;
+      haloX.to(point.x);
+      haloY.to(point.y);
+
+      const width = this.root.offsetWidth || 1280;
+      const height = this.root.offsetHeight || 960;
+      telemetry.setCursor(
+        Math.min(Math.max(point.x / width, 0), 1),
+        Math.min(Math.max(point.y / height, 0), 1),
+      );
+    });
+
+    this.root.addEventListener('pointerdown', (event) => {
+      const point = this.localPoint(event);
+      this.ripple(point.x, point.y);
+      // Snap the halo to the press: a lagging light under a click reads wrong.
+      targetX = point.x;
+      targetY = point.y;
+      haloX.set(point.x);
+      haloY.set(point.y);
+      halo.classList.add('is-pressed');
+      window.setTimeout(() => halo.classList.remove('is-pressed'), 180);
+    });
+
+    this.stopMotion.push(() => {
+      haloX.cancel();
+      haloY.cancel();
+      halo.remove();
+    });
+  }
+
+  /** A single expanding ring, removed as soon as it has finished. */
+  private ripple(x: number, y: number) {
+    const ring = el('div', 'ripple');
+    ring.style.left = x + 'px';
+    ring.style.top = y + 'px';
+    this.root.append(ring);
+    ring.addEventListener('animationend', () => ring.remove());
+  }
+
+  /** Where the taskbar button for `id` sits, in the screen's own coordinates. */
+  private taskbarAnchor(id: string) {
+    const button = this.taskbarApps.querySelector(`[data-app="${id}"]`) as HTMLElement | null;
+    if (!button) return null;
+
+    const screen = this.root.getBoundingClientRect();
+    const scale = screen.width / (this.root.offsetWidth || 1) || 1;
+    const box = button.getBoundingClientRect();
+
+    return {
+      x: (box.left + box.width / 2 - screen.left) / scale,
+      y: (box.top + box.height / 2 - screen.top) / scale,
+    };
   }
 
   /** Screen-space coordinates for a pointer event, undoing the CSS3D scale. */
@@ -455,7 +576,20 @@ export class OS {
       this.audio.toggleMute();
     });
     this.audio.setOnChange((muted) => sound.classList.toggle('is-off', muted));
-    tray.append(sound);
+
+    // The view switcher: step out to the room without leaving the desktop.
+    this.viewButton = el('button', 'taskbar__tray-button taskbar__view');
+    this.viewButton.type = 'button';
+    this.viewButton.title = 'Camera view';
+    this.viewButton.innerHTML = MENU_ICONS.view;
+    this.viewButton.addEventListener('click', () => {
+      this.audio.click();
+      // Screen → workstation → room → screen.
+      const next = this.view === 'screen' ? 'workstation' : this.view === 'workstation' ? 'room' : 'screen';
+      setRoomView(next);
+    });
+
+    tray.append(this.viewButton, sound);
 
     const clock = el('button', 'taskbar__clock');
     clock.type = 'button';
@@ -477,12 +611,15 @@ export class OS {
   private syncTaskbar() {
     this.taskbarApps.replaceChildren();
     const focused = this.manager.focusedId;
+    // The system monitor's process table reads this off the screen root.
+    this.root.dataset.running = this.manager.running.join(',');
 
     for (const app of apps) {
       if (!this.manager.isOpen(app.id)) continue;
 
       const button = el('button', 'taskbar__app');
       button.type = 'button';
+      button.dataset.app = app.id;
       button.classList.toggle('is-active', focused === app.id);
       button.classList.toggle('is-minimised', this.manager.isMinimised(app.id));
       button.innerHTML = '<span class="taskbar__icon">' + app.icon + '</span>';
@@ -621,6 +758,7 @@ export class OS {
 
         this.tickClock();
         this.clockTimer = window.setInterval(this.tickClock, 15000);
+        telemetry.setPowered(true);
 
         // Open with something to read rather than a bare desktop.
         this.manager.open(appsById.get('about')!);
@@ -644,6 +782,21 @@ export class OS {
     if (!interactive) this.closeMenus();
   }
 
+  /** Told by the experience whenever the room camera lands somewhere new. */
+  setView(view: 'room' | 'workstation' | 'screen') {
+    this.view = view;
+    this.root.dataset.view = view;
+    if (this.viewButton) {
+      this.viewButton.classList.toggle('is-wide', view !== 'screen');
+      this.viewButton.title =
+        view === 'screen'
+          ? 'Step back to the workstation'
+          : view === 'workstation'
+            ? 'Step back to the room'
+            : 'Back to the screen';
+    }
+  }
+
   /**
    * Fullscreen mode for phones: the screen stops being a fixed 1280x960 surface
    * projected onto glass and becomes a normal viewport-sized element, so text
@@ -651,11 +804,17 @@ export class OS {
    */
   setOverlay(on: boolean) {
     this.root.classList.toggle('is-overlay', on);
+    // The screen's coordinate box just changed size; the windows in it have
+    // to be re-fitted or they are clipped by the new surface.
+    requestAnimationFrame(() => this.manager.relayout());
   }
 
   destroy() {
     for (const timer of this.timers) window.clearTimeout(timer);
     window.clearInterval(this.clockTimer);
     window.clearInterval(this.ramTimer);
+    for (const stop of this.stopMotion) stop();
+    this.stopMotion = [];
+    telemetry.setPowered(false);
   }
 }

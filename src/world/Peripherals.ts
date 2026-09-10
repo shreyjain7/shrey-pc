@@ -1,9 +1,11 @@
 import {
   BoxGeometry,
   CatmullRomCurve3,
+  Color,
   CylinderGeometry,
   Group,
   InstancedMesh,
+  MathUtils,
   Matrix4,
   Mesh,
   MeshBasicMaterial,
@@ -18,13 +20,47 @@ import {
 } from 'three';
 import type { Quality } from '../experience/Sizes';
 import { roundedSlab } from './geometry';
+import { telemetry } from './telemetry';
 import { stickyNoteTexture } from './textures';
 import { DESK, MONITOR } from './layout';
 
-/** Everything else on and around the desk. Set dressing, but it sells the room. */
+/**
+ * Everything else on and around the desk.
+ *
+ * Three of these are not set dressing: the keyboard lights the keycap you
+ * actually pressed, the mouse tracks the operating system's own cursor across
+ * the mousepad, and the speaker cones move with whatever the music player is
+ * playing. They all read from the telemetry bus, so the desk reacts to the
+ * machine rather than looping an idle animation.
+ */
+
+/** How far the mouse may travel on the pad, in world units. */
+const MOUSE_RANGE = {
+  minX: 0.235,
+  maxX: 0.385,
+  minZ: 0.035,
+  maxZ: 0.165,
+};
+
+const KEY_BASE = new Color(0x33333a);
+const KEY_LIT = new Color(0x5fd0ff);
+
 export class Peripherals {
   readonly group = new Group();
   readonly deskLamp: SpotLight;
+
+  /** Keycaps, and the per-key backlight brightness that decays each frame. */
+  private keycaps!: InstancedMesh;
+  private keyHeat!: Float32Array;
+  private keyCount = 0;
+  private readonly keyColor = new Color();
+
+  private mouse!: Group;
+  private mouseAt = { x: 0.31, z: 0.1 };
+  private mouseLed!: MeshBasicMaterial;
+
+  private readonly cones: Mesh[] = [];
+  private readonly keyLeds: MeshBasicMaterial[] = [];
 
   private readonly plastic = new MeshStandardMaterial({
     color: 0xb9b3a4,
@@ -36,12 +72,6 @@ export class Peripherals {
     color: 0x26262b,
     roughness: 0.55,
     metalness: 0.08,
-  });
-
-  private readonly caseFront = new MeshStandardMaterial({
-    color: 0x3c3f47,
-    roughness: 0.62,
-    metalness: 0.1,
   });
 
   private readonly metal = new MeshStandardMaterial({
@@ -57,7 +87,6 @@ export class Peripherals {
       this.buildMousepad(),
       this.buildKeyboard(),
       this.buildMouse(),
-      this.buildTower(),
       this.buildMug(),
       this.buildBooks(),
       this.buildPenCup(),
@@ -77,11 +106,11 @@ export class Peripherals {
 
   private buildMousepad() {
     const pad = new Mesh(
-      roundedSlab(0.62, 0.24, 0.014, { depth: 0.004 }),
+      roundedSlab(0.26, 0.19, 0.012, { depth: 0.004 }),
       new MeshStandardMaterial({ color: 0x1d2027, roughness: 0.96 }),
     );
     pad.rotation.x = -Math.PI / 2;
-    pad.position.set(0.06, DESK.top + 0.002, 0.09);
+    pad.position.set(0.3, DESK.top + 0.002, 0.1);
     pad.receiveShadow = true;
     return pad;
   }
@@ -100,17 +129,21 @@ export class Peripherals {
     base.receiveShadow = true;
     group.add(base);
 
-    // Keycaps as one instanced mesh — 75 draw calls collapsed into one.
+    // Keycaps as one instanced mesh — 75 draw calls collapsed into one. The
+    // per-instance colour attribute is what lets a single cap light up.
     const columns = 15;
     const rows = 5;
     const keySize = 0.023;
     const gap = 0.0045;
-    const keycaps = new InstancedMesh(
+    this.keyCount = columns * rows;
+
+    this.keycaps = new InstancedMesh(
       new BoxGeometry(keySize, 0.007, keySize),
-      new MeshStandardMaterial({ color: 0x33333a, roughness: 0.85 }),
-      columns * rows,
+      new MeshStandardMaterial({ color: 0xffffff, roughness: 0.85 }),
+      this.keyCount,
     );
-    keycaps.castShadow = true;
+    this.keycaps.castShadow = true;
+    this.keyHeat = new Float32Array(this.keyCount);
 
     const dummy = new Object3D();
     const matrix = new Matrix4();
@@ -127,12 +160,14 @@ export class Peripherals {
         );
         dummy.updateMatrix();
         matrix.copy(dummy.matrix);
-        keycaps.setMatrixAt(index, matrix);
+        this.keycaps.setMatrixAt(index, matrix);
+        this.keycaps.setColorAt(index, KEY_BASE);
         index += 1;
       }
     }
-    keycaps.instanceMatrix.needsUpdate = true;
-    group.add(keycaps);
+    this.keycaps.instanceMatrix.needsUpdate = true;
+    if (this.keycaps.instanceColor) this.keycaps.instanceColor.needsUpdate = true;
+    group.add(this.keycaps);
 
     // Spacebar, across the front row.
     const spacebar = new Mesh(new BoxGeometry(keySize * 6, 0.007, keySize), this.darkPlastic);
@@ -140,12 +175,12 @@ export class Peripherals {
     spacebar.castShadow = true;
     group.add(spacebar);
 
-    // Status LEDs.
+    // Status LEDs. The middle one now means "the machine is powered".
     for (let i = 0; i < 3; i += 1) {
-      const led = new Mesh(
-        new PlaneGeometry(0.005, 0.003),
-        new MeshBasicMaterial({ color: i === 1 ? 0x66ff9a : 0x24242a }),
-      );
+      const material = new MeshBasicMaterial({ color: 0x24242a });
+      this.keyLeds.push(material);
+
+      const led = new Mesh(new PlaneGeometry(0.005, 0.003), material);
       led.rotation.x = -Math.PI / 2;
       led.position.set(width / 2 - 0.05 + i * 0.013, 0.0195, -depth / 2 + 0.014);
       group.add(led);
@@ -175,51 +210,16 @@ export class Peripherals {
     wheel.position.set(0, 0.017, -0.021);
     group.add(wheel);
 
-    group.position.set(0.31, DESK.top + 0.014, 0.1);
+    // The sensor glow underneath, which brightens as the cursor moves.
+    this.mouseLed = new MeshBasicMaterial({ color: 0x1a0d0d });
+    const sensor = new Mesh(new PlaneGeometry(0.012, 0.012), this.mouseLed);
+    sensor.rotation.x = Math.PI / 2;
+    sensor.position.y = -0.013;
+    group.add(sensor);
+
+    group.position.set(this.mouseAt.x, DESK.top + 0.014, this.mouseAt.z);
     group.rotation.y = -0.16;
-    return group;
-  }
-
-  private buildTower() {
-    const group = new Group();
-
-    const body = new Mesh(new BoxGeometry(0.19, 0.42, 0.44), this.darkPlastic);
-    body.position.y = 0.21;
-    body.castShadow = true;
-    body.receiveShadow = true;
-    group.add(body);
-
-    const face = new Mesh(new BoxGeometry(0.192, 0.2, 0.006), this.caseFront);
-    face.position.set(0, 0.32, 0.221);
-    group.add(face);
-
-    const slot = new Mesh(new BoxGeometry(0.13, 0.012, 0.004), this.darkPlastic);
-    slot.position.set(0, 0.35, 0.226);
-    group.add(slot);
-
-    // Front intake grille.
-    for (let i = 0; i < 6; i += 1) {
-      const vent = new Mesh(new BoxGeometry(0.12, 0.004, 0.003), this.darkPlastic);
-      vent.position.set(0, 0.1 + i * 0.014, 0.223);
-      group.add(vent);
-    }
-
-    const powerLight = new Mesh(
-      new SphereGeometry(0.005, 10, 8),
-      new MeshBasicMaterial({ color: 0x4fd1ff }),
-    );
-    powerLight.position.set(0.06, 0.27, 0.226);
-    group.add(powerLight);
-
-    const driveLight = new Mesh(
-      new SphereGeometry(0.0035, 8, 6),
-      new MeshBasicMaterial({ color: 0xff9a4f }),
-    );
-    driveLight.position.set(0.035, 0.27, 0.226);
-    group.add(driveLight);
-
-    group.position.set(-0.9, 0, -0.5);
-    group.rotation.y = 0.14;
+    this.mouse = group;
     return group;
   }
 
@@ -245,7 +245,7 @@ export class Peripherals {
     handle.castShadow = true;
     group.add(handle);
 
-    group.position.set(0.46, DESK.top, 0.02);
+    group.position.set(0.5, DESK.top, -0.02);
     return group;
   }
 
@@ -265,7 +265,7 @@ export class Peripherals {
       group.add(book);
     });
 
-    group.position.set(-0.52, DESK.top, -0.02);
+    group.position.set(0.5, DESK.top, -0.26);
     group.rotation.y = 0.22;
     return group;
   }
@@ -301,7 +301,7 @@ export class Peripherals {
   private buildSpeakers() {
     const group = new Group();
 
-    for (const x of [-0.78, 0.8]) {
+    for (const x of [-0.9, 0.86]) {
       const speaker = new Group();
 
       const box = new Mesh(new BoxGeometry(0.085, 0.17, 0.085), this.darkPlastic);
@@ -313,13 +313,15 @@ export class Peripherals {
       cone.rotation.x = Math.PI / 2;
       cone.position.set(0, 0.105, 0.044);
       speaker.add(cone);
+      // Tracked so the driver can be pushed in and out with the music.
+      this.cones.push(cone);
 
       const tweeter = new Mesh(new CylinderGeometry(0.012, 0.012, 0.006, 14), this.rubber);
       tweeter.rotation.x = Math.PI / 2;
       tweeter.position.set(0, 0.045, 0.044);
       speaker.add(tweeter);
 
-      speaker.position.set(x, DESK.top, -0.3);
+      speaker.position.set(x, DESK.top, -0.34);
       // Toed in toward the chair.
       speaker.rotation.y = x < 0 ? 0.42 : -0.42;
       group.add(speaker);
@@ -349,7 +351,7 @@ export class Peripherals {
       group.add(cup);
     }
 
-    group.position.set(0.78, DESK.top, 0.08);
+    group.position.set(0.9, DESK.top, 0.14);
     group.rotation.y = -0.5;
     return group;
   }
@@ -373,7 +375,7 @@ export class Peripherals {
       // Lying flat on the desk, slightly overlapping and askew.
       note.rotation.x = -Math.PI / 2;
       note.rotation.z = spot.turn;
-      note.position.set(0.6 + spot.x, DESK.top + 0.001 + index * 0.0006, 0.1 + spot.z);
+      note.position.set(0.6 + spot.x, DESK.top + 0.001 + index * 0.0006, 0.14 + spot.z);
       note.receiveShadow = true;
       group.add(note);
     });
@@ -381,25 +383,28 @@ export class Peripherals {
     return group;
   }
 
-  /** Power and signal runs from the monitor down to the tower. */
+  /** Signal and power runs draping off the back edge of the desk. */
   private buildCables() {
     const group = new Group();
     const material = new MeshStandardMaterial({ color: 0x121215, roughness: 0.85 });
     const segments = this.quality === 'low' ? 12 : 26;
 
     const runs: Vector3[][] = [
+      // Monitor, over the back edge.
       [
-        new Vector3(-0.08, 0.82, MONITOR.frontZ - 0.42),
-        new Vector3(-0.32, 0.7, -0.52),
-        new Vector3(-0.62, 0.34, -0.6),
-        new Vector3(-0.84, 0.16, -0.55),
-        new Vector3(-0.86, 0.4, -0.42),
+        new Vector3(0.02, 0.86, MONITOR.frontZ - 0.4),
+        new Vector3(0.12, 0.79, -0.56),
+        new Vector3(0.17, 0.71, -0.66),
+        new Vector3(0.21, 0.32, -0.69),
+        new Vector3(0.26, 0.03, -0.6),
       ],
+      // Tower rear I/O, following it down.
       [
-        new Vector3(0.06, 0.8, MONITOR.frontZ - 0.42),
-        new Vector3(0.1, 0.62, -0.6),
-        new Vector3(-0.3, 0.1, -0.72),
-        new Vector3(-0.78, 0.06, -0.66),
+        new Vector3(-0.52, 0.88, -0.35),
+        new Vector3(-0.5, 0.8, -0.55),
+        new Vector3(-0.45, 0.71, -0.67),
+        new Vector3(-0.4, 0.3, -0.69),
+        new Vector3(-0.3, 0.03, -0.62),
       ],
     ];
 
@@ -426,10 +431,12 @@ export class Peripherals {
     stem.castShadow = true;
     group.add(stem);
 
+    // The lamp now stands at the right of the desk, so the arm reaches left
+    // across it — every x below is mirrored from the original build.
     const arm = new Mesh(new CylinderGeometry(0.007, 0.007, 0.2, 14), this.metal);
-    arm.position.set(0.07, 0.345, 0.03);
-    arm.rotation.z = Math.PI / 2.3;
-    arm.rotation.y = -0.35;
+    arm.position.set(-0.07, 0.345, 0.03);
+    arm.rotation.z = -Math.PI / 2.3;
+    arm.rotation.y = 0.35;
     arm.castShadow = true;
     group.add(arm);
 
@@ -442,8 +449,8 @@ export class Peripherals {
         side: 2,
       }),
     );
-    shade.position.set(0.16, 0.315, 0.06);
-    shade.rotation.z = 0.55;
+    shade.position.set(-0.16, 0.315, 0.06);
+    shade.rotation.z = -0.55;
     shade.rotation.x = -0.25;
     shade.castShadow = true;
     group.add(shade);
@@ -452,19 +459,107 @@ export class Peripherals {
       new SphereGeometry(0.02, 12, 10),
       new MeshBasicMaterial({ color: 0xffd9a0 }),
     );
-    bulb.position.set(0.175, 0.295, 0.07);
+    bulb.position.set(-0.175, 0.295, 0.07);
     group.add(bulb);
 
     const light = new SpotLight(0xffc98a, 3.6, 2.4, Math.PI / 4, 0.7, 1.3);
-    light.position.set(0.175, 0.295, 0.07);
-    // Aimed at the desk surface beside the books, not down at the floor.
-    light.target.position.set(0.29, 0, 0.28);
+    light.position.set(-0.175, 0.295, 0.07);
+    // Aimed across the desk at the mousepad and the keyboard's right half.
+    light.target.position.set(-0.29, 0, 0.28);
     light.castShadow = this.quality !== 'low';
     light.shadow.mapSize.set(this.quality === 'high' ? 1024 : 512, this.quality === 'high' ? 1024 : 512);
     light.shadow.bias = -0.0015;
     group.add(light, light.target);
 
-    group.position.set(-0.74, DESK.top, -0.18);
+    group.position.set(0.84, DESK.top, -0.06);
     return { group, light };
+  }
+
+  /* ---------------------------------------------------------------------- */
+  /* Per-frame                                                               */
+  /* ---------------------------------------------------------------------- */
+
+  /**
+   * Everything reactive on the desk, driven off the telemetry bus.
+   *
+   * The keycaps are the fiddly part: a keystroke lights one random cap, and
+   * every cap's brightness decays independently, so a run of typing leaves a
+   * scatter of fading keys behind it rather than one uniform pulse.
+   */
+  update(delta: number) {
+    const state = telemetry.state;
+
+    this.updateKeyboard(delta, state.keys, state.powered);
+    this.updateMouse(delta, state.cursor.x, state.cursor.y, state.powered);
+
+    // Speaker drivers ride the music player's output level.
+    for (const cone of this.cones) {
+      const push = state.audio * 0.004;
+      cone.position.z = MathUtils.damp(cone.position.z, 0.044 + push, 22, delta);
+      const swell = 1 + state.audio * 0.08;
+      cone.scale.setScalar(MathUtils.damp(cone.scale.x, swell, 18, delta));
+    }
+  }
+
+  private updateKeyboard(delta: number, impulse: number, powered: boolean) {
+    if (!this.keycaps.instanceColor) return;
+
+    // A fresh keystroke picks a cap to light. The bus value is a decaying
+    // spike, so testing near its peak fires once per press rather than once
+    // per frame for as long as it takes to fade.
+    if (powered && impulse > 0.82) {
+      const index = Math.floor(Math.random() * this.keyCount);
+      this.keyHeat[index] = 1;
+    }
+
+    let dirty = false;
+    const decay = Math.exp(-4.5 * delta);
+
+    for (let i = 0; i < this.keyCount; i += 1) {
+      const heat = this.keyHeat[i];
+      if (heat <= 0.002) {
+        if (heat !== 0) {
+          this.keyHeat[i] = 0;
+          this.keycaps.setColorAt(i, KEY_BASE);
+          dirty = true;
+        }
+        continue;
+      }
+
+      this.keyHeat[i] = heat * decay;
+      this.keyColor.copy(KEY_BASE).lerp(KEY_LIT, this.keyHeat[i] * 0.85);
+      this.keycaps.setColorAt(i, this.keyColor);
+      dirty = true;
+    }
+
+    if (dirty) this.keycaps.instanceColor.needsUpdate = true;
+
+    // Caps-lock LED stands in for the power light.
+    this.keyLeds[1]?.color.setRGB(powered ? 0.4 : 0.14, powered ? 1 : 0.14, powered ? 0.6 : 0.16);
+  }
+
+  private updateMouse(delta: number, cursorX: number, cursorY: number, powered: boolean) {
+    const targetX = MathUtils.lerp(MOUSE_RANGE.minX, MOUSE_RANGE.maxX, cursorX);
+    const targetZ = MathUtils.lerp(MOUSE_RANGE.minZ, MOUSE_RANGE.maxZ, cursorY);
+
+    const previousX = this.mouseAt.x;
+    const previousZ = this.mouseAt.z;
+
+    // Damped rather than snapped: a mouse has mass, and the lag is what makes
+    // the mirroring read as a hand moving it instead of a teleport.
+    this.mouseAt.x = MathUtils.damp(this.mouseAt.x, targetX, 9, delta);
+    this.mouseAt.z = MathUtils.damp(this.mouseAt.z, targetZ, 9, delta);
+
+    this.mouse.position.x = this.mouseAt.x;
+    this.mouse.position.z = this.mouseAt.z;
+
+    // Lean into the direction of travel, and brighten the sensor while moving.
+    const speed = Math.hypot(this.mouseAt.x - previousX, this.mouseAt.z - previousZ) / Math.max(delta, 0.001);
+    const tilt = MathUtils.clamp((this.mouseAt.x - targetX) * 2.2, -0.12, 0.12);
+    this.mouse.rotation.z = MathUtils.damp(this.mouse.rotation.z, tilt, 8, delta);
+    this.mouse.rotation.y = MathUtils.damp(this.mouse.rotation.y, -0.16 + tilt * 0.5, 8, delta);
+
+    const glow = powered ? MathUtils.clamp(0.16 + speed * 1.4, 0, 1) : 0;
+    this.mouseLed.color.setRGB(glow, glow * 0.12, glow * 0.1);
   }
 }

@@ -9,6 +9,15 @@ import {
   skills,
   type Entry,
 } from '../data/cv';
+import {
+  DAYS,
+  PERIODS,
+  attendanceView,
+  classesOn,
+  formatTime,
+  overallAttendance,
+  semester,
+} from '../data/timetable';
 
 /**
  * A small in-memory filesystem with localStorage persistence.
@@ -85,6 +94,61 @@ function link(name: string, href: string): FsNode {
   return { name, kind: 'link', href, system: true, modified: now() };
 }
 
+/** The week, rendered as a plain-text grid for `cat ~/Documents/timetable.txt`. */
+function timetableText() {
+  const header = [
+    semester.institute,
+    `${semester.programme} — ${semester.label} (${semester.section})`,
+    semester.term,
+    '',
+  ].join('\n');
+
+  const body = DAYS.map((day) => {
+    const rows = classesOn(day.id).map((entry) => {
+      const time = `${formatTime(entry.period.start, true)}-${formatTime(entry.period.end, true)}`;
+      const kind = entry.slot.kind === 'lecture' ? '' : ` [${entry.slot.kind.toUpperCase()}]`;
+      return `  ${time}  ${entry.subject.short.padEnd(5)} ${entry.slot.room ?? ''}${kind}`;
+    });
+    return day.label + '\n' + (rows.length ? rows.join('\n') : '  (no classes)');
+  }).join('\n\n');
+
+  const periods =
+    '\nPeriods\n' +
+    PERIODS.map(
+      (period) =>
+        `  ${period.id.padEnd(3)} ${formatTime(period.start, true)}-${formatTime(period.end, true)}` +
+        (period.break ? '  ' + (period.label ?? 'Break') : ''),
+    ).join('\n');
+
+  return header + body + '\n' + periods + '\n';
+}
+
+/** The attendance ledger as text, including the can-I-skip maths. */
+function attendanceText() {
+  const overall = overallAttendance();
+  const lines = attendanceView().map((view) => {
+    const verdict = view.safe
+      ? `can miss ${view.canSkip}`
+      : `must attend ${view.mustAttend} in a row`;
+    return (
+      '  ' +
+      view.subject.short.padEnd(6) +
+      `${view.attended}/${view.held}`.padEnd(9) +
+      view.percent.toFixed(1).padStart(5) +
+      '%   ' +
+      verdict
+    );
+  });
+
+  return (
+    'Attendance\n==========\n\n' +
+    `Overall: ${overall.percent.toFixed(1)}% (${overall.attended}/${overall.held})\n` +
+    `Institute minimum: ${semester.minimumAttendance}%\n\n` +
+    lines.join('\n') +
+    '\n'
+  );
+}
+
 /** The read-only part of the tree, rebuilt from the CV on every boot. */
 function systemTree(): FsNode {
   const readme =
@@ -115,8 +179,13 @@ function systemTree(): FsNode {
     dir('home', [
       dir('shrey', [
         dir('Desktop', [
+          app('Aperture', 'browser'),
+          app('Timetable', 'timetable'),
+          app('System Monitor', 'sysmon'),
           app('Terminal', 'terminal'),
           app('Files', 'explorer'),
+          app('Wire', 'news'),
+          app('Player', 'music'),
           app('Notepad', 'notepad'),
           app('Resume.pdf', 'resume'),
           app('Minesweeper', 'minesweeper'),
@@ -133,6 +202,8 @@ function systemTree(): FsNode {
           file('achievements.txt', section('Achievements', achievements)),
           file('skills.txt', skillsText),
           file('contact.txt', contact),
+          file('timetable.txt', timetableText()),
+          file('attendance.txt', attendanceText()),
         ]),
         dir('Projects', projects.map((project) => file(slug(project.title) + '.txt', bullet(project)))),
         dir('Links', links.map((entry) => link(entry.label, entry.href))),

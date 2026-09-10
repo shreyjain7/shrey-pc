@@ -53,3 +53,28 @@ export const IDLE_CAMERA = {
   position: new Vector3(0.34, 1.4, 1.52),
   target: new Vector3(0, 1.06, -0.15),
 };
+
+/**
+ * Where the tower sits. On the desk rather than under it, and angled so the
+ * glass panel faces the resting camera — the machine is meant to be watched
+ * while it works, not hidden by a desk leg.
+ */
+export const TOWER = {
+  position: new Vector3(-0.6, DESK.top, -0.16),
+  /** Negative yaw swings the +X glass side toward the idle camera. */
+  rotationY: -0.4,
+};
+
+/**
+ * The workstation pose.
+ *
+ * The OS docks over the right of the viewport here, so this is framed for the
+ * strip that is left over: the tower lands at about a quarter of the way
+ * across, with the keyboard and the near edge of the CRT beside it. Aiming
+ * right of the desk's centre is what pushes the machine into that strip
+ * instead of leaving it behind the dock.
+ */
+export const WORKSTATION_CAMERA = {
+  position: new Vector3(1.3, 1.42, 2.0),
+  target: new Vector3(0.16, 1.0, -0.1),
+};

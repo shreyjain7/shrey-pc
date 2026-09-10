@@ -326,6 +326,10 @@
 .windows {
   position: absolute;
   inset: 0 0 56px 0;
+  /* The layer spans the whole desktop and paints above the icon grid, so
+     without this it swallows every click meant for an icon or for the
+     desktop's own context menu. Only the windows themselves take input. */
+  pointer-events: none;
 }
 
 /* --- Windows ------------------------------------------------------------ */
@@ -342,29 +346,26 @@
   box-shadow:
     0 20px 50px rgba(0, 0, 0, 0.55),
     0 2px 0 rgba(255, 255, 255, 0.04) inset;
+  /* Opacity and transform are owned by the spring engine in WindowManager, so
+     nothing is declared for them here — a CSS transition on the same
+     properties would fight the springs and lose. */
   opacity: 0;
-  transform: scale(0.97) translateY(8px);
-  transition: opacity 160ms ease, transform 160ms ease;
+  pointer-events: auto;
+  will-change: transform, opacity;
+  transition: box-shadow 220ms ease, border-color 220ms ease;
 }
 
-.win.is-open {
-  opacity: 1;
-  transform: none;
+.win.is-focused {
+  border-color: var(--accent-line);
+  box-shadow:
+    0 30px 70px rgba(0, 0, 0, 0.62),
+    0 0 0 1px var(--accent-soft),
+    0 2px 0 rgba(255, 255, 255, 0.05) inset;
 }
 
+.win.is-minimised,
 .win.is-closing {
-  opacity: 0;
-  transform: scale(0.97) translateY(6px);
-}
-
-.win.is-minimised {
-  opacity: 0;
-  transform: scale(0.94) translateY(28px);
   pointer-events: none;
-}
-
-.win.is-dragging {
-  transition: none;
 }
 
 .win.is-maximised {

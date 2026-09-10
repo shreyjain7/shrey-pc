@@ -1,27 +1,75 @@
 # shrey-pc
 
-An interactive 3D portfolio for **Shrey Jain** — a CRT computer sitting on a desk
+An interactive 3D portfolio for **Shrey Jain** — a workstation sitting on a desk
 in a dark room. Wait for the resource counter, press START, then click the
 monitor: the camera flies in, the machine runs a POST, and the CV turns out to be
 a small operating system you can actually use.
+
+It is not just the screen. The **tower beside it is a real machine**: a
+glass-panelled case whose fans spin at a speed derived from the load the OS is
+genuinely under, whose drive LED blinks when the virtual filesystem is written
+to, and whose RGB cycles faster the harder it works. Type in the terminal and a
+keycap lights up out on the desk. Move the cursor and the mouse slides across
+the mousepad. Play something and the speaker cones move.
 
 Live: _(add your deployment URL here)_
 
 ## What's in it
 
-- **A room, not a page.** Desk, CRT, keyboard, mouse, tower, lamp, speakers,
-  headphones, mug, pen cup, sticky notes, cabling, a shelf with books and a
-  plant, framed prints, a shuttered window onto a night skyline, a rug, and dust
-  drifting through the lamp light.
-- **A real OS on the glass** — not a set of static panels. See below.
+- **A room, not a page.** Desk, CRT, keyboard, mouse, a glass-panel tower,
+  lamp, speakers, headphones, mug, pen cup, sticky notes, cabling, a shelf with
+  books and a plant, framed prints, a shuttered window onto a night skyline, a
+  rug, and dust drifting through the lamp light.
+- **A machine you can watch work.** See [The hardware](#the-hardware) below.
+- **A real OS on the glass** — not a set of static panels. See [shrey-os](#shrey-os).
+- **Three camera views**: the room, the *workstation* (the machine and the
+  desktop side by side), and square on the glass. Cycle them with the taskbar
+  button, the corner control, or the `V` key.
 - **A BIOS boot** with a memory count that ticks up in place, drive detection,
   and a CRT "snap" into the desktop.
 - **Sound**, synthesised at runtime — mains hum and flyback whine from the tube,
   keycaps bottoming out as you type, a degauss thunk at power-on, a startup
-  chime. Mutable, and the preference sticks.
+  chime, and a generative soundtrack in the music player. Mutable, and the
+  preference sticks.
 - **Free look.** Drag or use the arrow keys to orbit the desk; a reset button
   swings you back.
-- **Corner controls**: sound, reset view, fullscreen.
+- **Corner controls**: camera view, sound, reset view, fullscreen.
+
+## The hardware
+
+The tower is built the same way as everything else here — procedurally, from
+boxes, extruded slabs and instanced blade clusters — but it is wired to what the
+operating system is actually doing.
+
+`src/world/telemetry.ts` is the only place the two halves meet. The OS pushes
+signals in (a keystroke, a disk write, an app launching, the music player's
+output level, where the cursor is); the bus smooths them into load, memory,
+temperature and a fan curve; and the room reads that back every frame. Nothing
+is on a timed loop.
+
+- **Six fans** — three front intakes, a CPU cooler, two on the GPU and a rear
+  exhaust — spinning on a curve that chases *temperature*, not load, so there
+  is the same half-second lag a real machine has.
+- **A tempered side panel** over a motherboard, a tower cooler with heat pipes,
+  a graphics card with a lit logo bar, two RGB memory sticks, a PSU shroud and
+  a drive cage.
+- **Lighting that means something**: the cooler block runs blue when cold and
+  slides to red as the core heats, the RGB cycle speeds up under load, the
+  drive LED flickers on every write to the virtual filesystem.
+- **The desk reacts too.** A keystroke anywhere in the OS lights a keycap and
+  leaves it fading; the mouse tracks the OS cursor across the mousepad with a
+  little lag and leans into the direction of travel; the speaker cones ride the
+  music player's output.
+
+Two places to watch it from:
+
+- **Workstation view** pulls the camera back so the tower, the keyboard and the
+  CRT are all in frame, and lifts the OS off the glass into a panel docked to
+  the right — so the desktop stays usable *while* the machine running it is on
+  screen.
+- **System Monitor**, an app, renders the tower into a window using a second
+  renderer over the *same scene*. It is not a video: it is the same fans at the
+  same angle, spun by the same numbers as the graphs beside them.
 
 ## shrey-os
 
@@ -38,8 +86,9 @@ terminal appears on the desktop, a file renamed on the desktop is visible to
 - **Shell** — a genuine interpreter over that filesystem: `ls`, `cd`, `pwd`,
   `cat`, `mkdir`, `touch`, `rm`, `mv`, `cp`, `echo >` / `>>`, `tree`, `find`,
   `grep`, `open`, `edit`, `df`, `history`, `neofetch`, `uname`, `whoami`,
-  `sudo`, `clear`. Tab completion over both commands and filenames, plus
-  command history on the arrow keys.
+  `sudo`, `clear`, plus `next`, `today` and `attendance` over the timetable.
+  Tab completion over both commands and filenames, plus command history on the
+  arrow keys.
 - **Files** — a file manager with back/forward/up history, breadcrumbs,
   selection, new folder and file, rename (F2), delete (Del) and context menus.
 - **Notepad** — opens any text file, edits it, saves with Ctrl+S or Save as,
@@ -47,6 +96,26 @@ terminal appears on the desktop, a file renamed on the desktop is visible to
   read-only.
 - **Paint** — a raster editor with a palette, brush sizes and an eraser; saves a
   PNG into `~/Pictures`, and reopens it later.
+- **Aperture**, a browser — tabs with their own history, an address bar that
+  resolves what you type, bookmarks, a progress bar, and a small local web:
+  a start page, the CV as proper pages, the timetable, and a **live GitHub
+  profile** pulled from the public API for
+  [github.com/shreyjain7](https://github.com/shreyjain7) (with a bundled
+  snapshot when the network says no). Typing anything that is not an address
+  searches the machine. External addresses get an honest hand-off card rather
+  than a blank frame, because sites refuse to be embedded.
+- **Timetable & Attendance** — the week as a colour-coded grid, today as a
+  timeline that knows which period you are actually in, and the attendance
+  ledger with the only number that matters: how many more classes you can miss
+  before you drop under the institute's minimum. Marking yourself present
+  persists.
+- **System Monitor** — the live case cam, four rolling graphs, temperatures,
+  the fan curve, and a process table built from what is actually open.
+- **Player** — four generative tracks synthesised from a chord progression and
+  a step sequencer, with a spectrum visualiser that also drives the speakers in
+  the room. No audio files.
+- **Wire**, a news reader — the Hacker News front page through the public
+  Algolia endpoint, laid out as a reader rather than a list of links.
 - **Minesweeper** — three difficulties, flags, chording, a timer, and a first
   click that is always safe.
 - **Calculator** — four functions, percent and sign, mouse or keyboard.
@@ -63,6 +132,29 @@ terminal appears on the desktop, a file renamed on the desktop is visible to
 The CV still has its own windows — About, Projects, Experience, Skills,
 Education, Achievements, Contact and a printable résumé sheet — reachable from
 the start menu.
+
+## Motion
+
+Everything that moves in the OS runs off one engine (`src/os/anim.ts`): a single
+`requestAnimationFrame` ticker, and springs integrated at a fixed 1/240s substep
+so the motion is identical on a 60Hz panel and a 144Hz one.
+
+Springs rather than CSS transitions, because a spring can be re-targeted
+mid-flight without the jump you get from restarting a transition — a window can
+be dragged while it is still settling from being opened. Windows compose four
+independent springs (scale, x, y, tilt) plus pointer parallax into a single
+transform write per frame. Minimising *genies* toward the app's own taskbar
+button; maximising and snapping set the new geometry first and then play the
+difference back, so the content has already reflowed while the frame is still
+moving.
+
+One rule shapes the rest of it: the desktop is projected onto the glass through
+a 3D transform, so **every pixel that changes forces the whole 1280×960 surface
+to re-raster**. So the cursor halo is driven by its own springs and goes silent
+when the pointer stops, window parallax retires itself once it has caught up,
+the monitor's graphs sample on a fixed clock, and the music visualiser draws
+every bar into one path and fills it once, at 30Hz. `prefers-reduced-motion`
+cuts the whole thing down in one place.
 
 ## Built for phones, not just shrunk
 
@@ -112,6 +204,20 @@ to change. Edit the profile, links, education, skills, projects, experience and
 achievements there and every window, the terminal and the printable résumé sheet
 update together.
 
+## Editing the timetable
+
+**The timetable lives in [`src/data/timetable.ts`](src/data/timetable.ts)** —
+subjects, the period times, the day-by-day grid, and the seed attendance
+counts. The app, the browser's timetable page, the `next` / `today` /
+`attendance` shell commands and `~/Documents/timetable.txt` all read from it, so
+they update together.
+
+The subject list is taken from the coursework already in `cv.ts`. **The slot
+grid, room numbers, faculty initials and attendance counts are structure, not a
+transcript** — swap in the real ones. Attendance edits made in the app are
+written to `localStorage` over the top of the seed, so marking yourself present
+survives a reload without touching the file.
+
 To swap the downloadable PDF, replace `public/Shrey_Jain_Resume.pdf` (keep the
 filename, or update `resumePath` at the bottom of `cv.ts`).
 
@@ -155,22 +261,40 @@ The build is a static `dist/` folder, so anything that serves static files works
 src/
   data/cv.ts            every word the site displays
   analytics.ts          opt-in GA4, no-op without VITE_GA_ID
-  experience/           Sizes (device tiers), Time, Camera (orbit + dolly),
-                        Audio (synthesised), Renderer, Experience (frame loop)
+  data/timetable.ts     the week, the subjects and the attendance ledger
+  experience/           Sizes (device tiers), Time, Camera (three poses),
+                        Audio (synthesised), Renderer, Experience (frame loop
+                        and the case-cam renderer)
   world/                layout constants, geometry and texture helpers, Room,
-                        Desk, Monitor (CRT + CSS3D screen), Peripherals, Dust,
-                        World (staged build)
+                        Desk, Monitor (CRT + CSS3D screen), Tower (the machine),
+                        Peripherals (reactive desk), Dust, telemetry.ts (the
+                        wire between the OS and the hardware), World
   os/                   fs.ts (virtual filesystem), settings.ts, system.ts,
+                        anim.ts (the motion engine), github.ts (live API),
                         OS shell, WindowManager, Terminal (the shell),
                         ContextMenu, Notifications, ui helpers,
-                        apps/ (Explorer, Notepad, Paint, Minesweeper,
-                        Calculator, Settings), screen.css + desktop.css
-  style.css             page chrome: loader, overlay UI, render-layer stacking
+                        apps/ (Browser, Timetable, SystemMonitor, Music, News,
+                        Explorer, Notepad, Paint, Minesweeper, Calculator,
+                        Settings), screen.css + desktop.css + apps.css
+  style.css             page chrome: loader, overlay UI, workstation dock
 ```
 
-`src/world/layout.ts` holds the numbers the camera, the monitor and the CSS3D
-screen all have to agree on — screen size, bezel depth, the idle camera pose.
-Change those and everything else follows.
+`src/world/layout.ts` holds the numbers the camera, the monitor, the tower and
+the CSS3D screen all have to agree on — screen size, bezel depth, where the case
+stands, and the idle and workstation camera poses. Change those and everything
+else follows.
+
+## Network
+
+Two things reach the internet, and both fail softly:
+
+- the **GitHub page** calls `api.github.com` for the profile and repositories
+  (no key; cached in `sessionStorage` for half an hour to stay inside the
+  unauthenticated rate limit), and
+- **Wire** calls the Hacker News Algolia endpoint (no key).
+
+Blocked, offline or rate-limited, each falls back to a small bundled set and
+says so in the interface rather than showing an error or an empty page.
 
 ## Credits
 

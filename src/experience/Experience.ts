@@ -1,7 +1,11 @@
-import { MathUtils, Scene } from 'three';
+import { MathUtils, PerspectiveCamera, Scene, Vector3, WebGLRenderer } from 'three';
 import { initAnalytics, track } from '../analytics';
 import { links, profile } from '../data/cv';
 import { OS } from '../os/OS';
+import { registerScene, type RoomView } from '../os/system';
+import { CASE } from '../world/Tower';
+import { TOWER } from '../world/layout';
+import { telemetry } from '../world/telemetry';
 import { World } from '../world/World';
 import { Audio } from './Audio';
 import { Camera } from './Camera';
@@ -31,10 +35,24 @@ export class Experience {
   private soundButton!: HTMLButtonElement;
 
   private overlay!: HTMLElement;
+  private telemetryRows: Array<[string, HTMLElement]> = [];
   /** Permanent host for the OS on the glass; the OS moves in and out of it. */
   private readonly mount = document.createElement('div');
   private glow = 0;
   private ready = false;
+  private panelClock = 0;
+
+  /** Where the OS currently lives, so a mode change knows what to undo. */
+  private view: RoomView = 'room';
+  private viewButton!: HTMLButtonElement;
+
+  /* --- Case cam: a second, tiny renderer over the same scene ------------- */
+  private camRenderer: WebGLRenderer | null = null;
+  private camCamera: PerspectiveCamera | null = null;
+  private camCanvas: HTMLCanvasElement | null = null;
+  private camClock = 0;
+  private camAngle = 0.6;
+  private readonly camTarget = new Vector3();
 
   constructor() {
     initAnalytics();
@@ -49,12 +67,25 @@ export class Experience {
     this.mount.className = 'screen-mount';
     this.mount.append(this.os.root);
 
-    this.world = new World(this.scene, this.camera, this.sizes, this.mount, () =>
-      this.enterScreen(),
+    this.world = new World(
+      this.scene,
+      this.camera,
+      this.sizes,
+      this.mount,
+      () => this.enterScreen(),
+      () => this.inspectMachine(),
     );
     this.renderer = new Renderer(canvas, cssTarget, this.scene, this.camera, this.sizes);
 
     this.buildUI();
+
+    // The tower stands on the desk, so its centre is half a case up from it.
+    this.camTarget.set(TOWER.position.x, TOWER.position.y + CASE.height / 2, TOWER.position.z);
+
+    registerScene({
+      caseCam: (canvas) => this.mountCaseCam(canvas),
+      setView: (view) => this.setView(view),
+    });
 
     document.body.classList.add('is-loading', 'is-idle');
     this.time.on((delta, elapsed) => this.update(delta, elapsed));
@@ -123,6 +154,9 @@ export class Experience {
     document.body.classList.remove('is-loading');
     document.body.classList.add('is-ready');
     this.world.monitor.setPowered(true);
+    // The CRT is showing its standby screen, so the machine is already
+    // running — the case should be lit and idling, not a black box.
+    telemetry.setPowered(true);
     this.ready = true;
 
     track('experience_started', { quality: this.sizes.quality });
@@ -133,19 +167,72 @@ export class Experience {
   /* ---------------------------------------------------------------------- */
 
   private enterScreen() {
-    if (!this.ready || this.camera.mode === 'focused') return;
+    this.setView('screen');
+  }
 
-    document.body.classList.remove('is-idle');
-    document.body.classList.add('is-focused');
+  private exitScreen() {
+    this.setView(this.view === 'screen' ? 'workstation' : 'room');
+  }
+
+  /** Clicking the case takes you to the pose it looks best from. */
+  private inspectMachine() {
+    if (!this.ready) return;
+    this.setView('workstation');
+    track('machine_inspected');
+  }
+
+  /**
+   * The one place the three views are switched between.
+   *
+   *  - **room** — the resting shot. The OS sits on the glass, untouchable.
+   *  - **workstation** — pulled back so the tower, the desk and the CRT are
+   *    all in frame. The OS lifts off the glass into a panel docked to the
+   *    right, so you can keep using it *while watching the machine run it*.
+   *  - **screen** — square on the glass, the OS filling the view. On a phone
+   *    it leaves the 3D layer entirely and runs at true 1:1 pixels.
+   */
+  private setView(view: RoomView) {
+    if (!this.ready || view === this.view) return;
+
+    const previous = this.view;
+    this.view = view;
+
+    document.body.classList.toggle('is-idle', view === 'room');
+    document.body.classList.toggle('is-focused', view === 'screen');
+    document.body.classList.toggle('is-workstation', view === 'workstation');
+
+    this.os.setView(view);
+    this.syncViewButton();
+
+    // The OS only takes input once the camera has actually landed.
+    if (previous !== 'room') this.os.setInteractive(false);
+
+    if (view === 'room') {
+      this.detachOverlay();
+      this.audio.setHumLevel(0.35);
+      this.audio.click();
+      this.camera.setMode('idle');
+      return;
+    }
+
+    if (view === 'workstation') {
+      this.audio.whoosh();
+      this.camera.setMode('workstation', () => {
+        this.attachOverlay('workstation');
+        this.os.setInteractive(true);
+        this.os.powerOn();
+        this.audio.setHumLevel(0.8);
+      });
+      track('workstation_entered');
+      return;
+    }
+
     this.audio.whoosh();
-
-    this.camera.focus(() => {
-      // On a phone, lift the OS off the glass and run it fullscreen.
-      if (this.sizes.compact) {
-        this.overlay.append(this.os.root);
-        this.os.setOverlay(true);
-        document.body.classList.add('is-overlay');
-      }
+    this.camera.setMode('focused', () => {
+      // Back on the glass — unless this is a phone, where the glass is too
+      // small to read and the OS stays in its fullscreen overlay.
+      if (this.sizes.compact) this.attachOverlay('phone');
+      else this.detachOverlay();
 
       this.os.setInteractive(true);
       this.os.powerOn();
@@ -155,22 +242,143 @@ export class Experience {
     track('monitor_focused');
   }
 
-  private exitScreen() {
-    if (this.camera.mode !== 'focused') return;
+  /** Lift the OS off the glass and into a screen-space panel. */
+  private attachOverlay(kind: 'workstation' | 'phone') {
+    if (this.os.root.parentElement !== this.overlay) this.overlay.append(this.os.root);
+    this.os.setOverlay(true);
+    document.body.classList.add('is-overlay');
+    this.overlay.dataset.kind = kind;
+  }
 
-    this.os.setInteractive(false);
+  /** Put it back on the glass. */
+  private detachOverlay() {
+    if (!document.body.classList.contains('is-overlay')) return;
+    document.body.classList.remove('is-overlay');
+    this.os.setOverlay(false);
+    this.mount.append(this.os.root);
+    delete this.overlay.dataset.kind;
+  }
 
-    if (document.body.classList.contains('is-overlay')) {
-      document.body.classList.remove('is-overlay');
-      this.os.setOverlay(false);
-      this.mount.append(this.os.root);
+  private syncViewButton() {
+    if (!this.viewButton) return;
+    const label =
+      this.view === 'screen'
+        ? 'Step back to the workstation'
+        : this.view === 'workstation'
+          ? 'Step back to the room'
+          : 'Sit down at the machine';
+    this.viewButton.title = label;
+    this.viewButton.setAttribute('aria-label', label);
+    this.viewButton.classList.toggle('is-active', this.view === 'workstation');
+  }
+
+  /* ---------------------------------------------------------------------- */
+  /* Case cam                                                                */
+  /* ---------------------------------------------------------------------- */
+
+  /**
+   * Render the tower into an OS window.
+   *
+   * A second WebGLRenderer over the *same* scene: the geometry, the materials
+   * and the lights are all shared, so what this draws is not a copy of the
+   * machine but the machine — the same fans, at the same angle, spun by the
+   * same telemetry. It costs a second draw of the scene, so it runs at a
+   * capped frame rate into a small buffer, and only exists while the window
+   * that asked for it is open.
+   */
+  private mountCaseCam(canvas: HTMLCanvasElement) {
+    // One at a time: a second System Monitor reuses the same renderer.
+    this.disposeCaseCam();
+
+    let renderer: WebGLRenderer;
+    try {
+      renderer = new WebGLRenderer({
+        canvas,
+        alpha: true,
+        antialias: this.sizes.quality === 'high',
+        powerPreference: 'low-power',
+      });
+    } catch {
+      // Some devices refuse a second WebGL context; the window still works,
+      // it just shows an empty stage rather than failing to open.
+      return () => {};
     }
 
-    document.body.classList.remove('is-focused');
-    document.body.classList.add('is-idle');
-    this.audio.setHumLevel(0.35);
-    this.audio.click();
-    this.camera.unfocus();
+    renderer.setClearColor(0x05070a, 1);
+    renderer.outputColorSpace = this.renderer.webgl.outputColorSpace;
+    renderer.toneMapping = this.renderer.webgl.toneMapping;
+    renderer.toneMappingExposure = 0.98;
+    // No shadows in the inset: they are the expensive part and at this size
+    // nothing in frame is large enough to read one.
+    renderer.shadowMap.enabled = false;
+
+    const camera = new PerspectiveCamera(34, 1.6, 0.02, 8);
+
+    this.camRenderer = renderer;
+    this.camCamera = camera;
+    this.camCanvas = canvas;
+    this.camClock = 0;
+
+    telemetry.setGpuLoad(0.4);
+
+    return () => {
+      if (this.camRenderer === renderer) this.disposeCaseCam();
+    };
+  }
+
+  private disposeCaseCam() {
+    this.camRenderer?.dispose();
+    this.camRenderer = null;
+    this.camCamera = null;
+    this.camCanvas = null;
+    telemetry.setGpuLoad(0);
+  }
+
+  /** Orbit the case slowly, and draw at a capped rate. */
+  private updateCaseCam(delta: number) {
+    const renderer = this.camRenderer;
+    const camera = this.camCamera;
+    const canvas = this.camCanvas;
+    if (!renderer || !camera || !canvas) return;
+
+    // A window that has been closed leaves its canvas detached; stop drawing.
+    if (!canvas.isConnected) {
+      this.disposeCaseCam();
+      return;
+    }
+
+    const cap = this.sizes.quality === 'high' ? 1 / 45 : 1 / 26;
+    this.camClock += delta;
+    if (this.camClock < cap) return;
+    this.camClock = 0;
+
+    // Speed up with load, so a busy machine is also a busier shot.
+    this.camAngle += delta * (0.12 + telemetry.state.cpu * 0.35);
+
+    const width = canvas.clientWidth || 320;
+    const height = canvas.clientHeight || 200;
+    if (width < 8 || height < 8) return;
+
+    const ratio = Math.min(window.devicePixelRatio || 1, this.sizes.quality === 'high' ? 1.75 : 1);
+    renderer.setPixelRatio(ratio);
+    renderer.setSize(width, height, false);
+
+    if (camera.aspect !== width / height) {
+      camera.aspect = width / height;
+      camera.updateProjectionMatrix();
+    }
+
+    // Keep the orbit on the glass-panel side, and bob just above centre.
+    const radius = 0.64;
+    const swing = Math.sin(this.camAngle) * 0.55 + TOWER.rotationY + Math.PI / 2;
+    camera.position.set(
+      this.camTarget.x + Math.sin(swing) * radius,
+      this.camTarget.y + 0.06 + Math.sin(this.camAngle * 0.7) * 0.05,
+      this.camTarget.z + Math.cos(swing) * radius,
+    );
+    camera.lookAt(this.camTarget);
+
+    renderer.render(this.scene, camera);
   }
 
   /* ---------------------------------------------------------------------- */
@@ -247,7 +455,10 @@ export class Experience {
     hint.className = 'ui-panel ui-panel--idle hint';
     const dot = document.createElement('span');
     dot.className = 'hint__dot';
-    hint.append(dot, document.createTextNode('Tap the monitor · drag to look around'));
+    hint.append(
+      dot,
+      document.createTextNode('Tap the monitor to sit down · tap the tower for a closer look'),
+    );
 
     const social = document.createElement('div');
     social.className = 'ui-panel ui-panel--idle social';
@@ -266,8 +477,33 @@ export class Experience {
     const exit = document.createElement('button');
     exit.type = 'button';
     exit.className = 'ui-panel ui-panel--focused exit';
-    exit.textContent = '← Back to the room';
+    exit.textContent = '← Step back';
     exit.addEventListener('click', () => this.exitScreen());
+
+    // A standing readout of what the machine is doing, visible whenever the
+    // room is. It is the same data the tower's fans are reacting to.
+    const telemetryPanel = document.createElement('div');
+    telemetryPanel.className = 'ui-panel ui-panel--room telemetry';
+    const rows: Array<[string, HTMLElement]> = [];
+    for (const label of ['CPU', 'GPU', 'FAN', 'TEMP']) {
+      const row = document.createElement('div');
+      row.className = 'telemetry__row';
+      const name = document.createElement('span');
+      name.className = 'telemetry__label';
+      name.textContent = label;
+      const bar = document.createElement('span');
+      bar.className = 'telemetry__bar';
+      const fill = document.createElement('span');
+      fill.className = 'telemetry__fill';
+      bar.append(fill);
+      const value = document.createElement('span');
+      value.className = 'telemetry__value';
+      value.textContent = '—';
+      row.append(name, bar, value);
+      telemetryPanel.append(row);
+      rows.push([label, row]);
+    }
+    this.telemetryRows = rows;
 
     /* --- Corner controls --------------------------------------------------- */
     const controls = document.createElement('div');
@@ -282,6 +518,15 @@ export class Experience {
       this.soundButton.innerHTML = muted ? ICON_MUTED : ICON_SOUND;
       this.soundButton.title = muted ? 'Sound off' : 'Sound on';
     });
+
+    // Cycles screen → workstation → room, the same order as the taskbar's.
+    this.viewButton = this.iconButton('Change view', ICON_VIEW, () => {
+      this.audio.click();
+      const next: RoomView =
+        this.view === 'screen' ? 'workstation' : this.view === 'workstation' ? 'room' : 'screen';
+      this.setView(next);
+    });
+    this.syncViewButton();
 
     const resetButton = this.iconButton('Reset view', ICON_RESET, () => {
       this.camera.resetView();
@@ -302,19 +547,26 @@ export class Experience {
       fullscreenButton.innerHTML = document.fullscreenElement ? ICON_COLLAPSE : ICON_EXPAND;
     });
 
-    controls.append(this.soundButton, resetButton, fullscreenButton);
+    controls.append(this.viewButton, this.soundButton, resetButton, fullscreenButton);
 
     this.overlay = document.createElement('div');
     this.overlay.id = 'os-overlay';
 
-    this.ui.append(brand, hint, social, exit, controls);
+    this.ui.append(brand, hint, social, telemetryPanel, exit, controls);
     document.body.append(this.overlay, this.loader);
 
     window.addEventListener('keydown', (event) => {
       if (event.key === 'Escape') this.exitScreen();
+
       // The standby screen says "press any key to boot", so honour it.
-      if (this.ready && this.camera.mode === 'idle' && event.key === 'Enter') {
-        this.enterScreen();
+      if (this.ready && this.view === 'room' && event.key === 'Enter') this.enterScreen();
+
+      // `V` cycles the camera without reaching for the corner controls, but
+      // never while a field somewhere in the OS has the caret.
+      if (event.key.toLowerCase() === 'v' && !event.metaKey && !event.ctrlKey) {
+        const active = document.activeElement;
+        if (active instanceof HTMLInputElement || active instanceof HTMLTextAreaElement) return;
+        this.setView(this.view === 'screen' ? 'workstation' : this.view === 'workstation' ? 'room' : 'screen');
       }
     });
   }
@@ -324,6 +576,9 @@ export class Experience {
   /* ---------------------------------------------------------------------- */
 
   private update(delta: number, elapsed: number) {
+    // Telemetry first: everything downstream this frame reads from it.
+    telemetry.update(delta);
+
     this.camera.update(delta, elapsed);
     this.world.update(delta, elapsed);
 
@@ -333,9 +588,37 @@ export class Experience {
     this.world.monitor?.setGlow(this.glow);
 
     this.renderer.update();
+    this.updateCaseCam(delta);
+    this.updateTelemetryPanel(delta);
+  }
+
+  /** The corner readout. Throttled — four DOM writes a frame is wasteful. */
+  private updateTelemetryPanel(delta: number) {
+    if (!this.telemetryRows.length) return;
+
+    this.panelClock += delta;
+    if (this.panelClock < 0.12) return;
+    this.panelClock = 0;
+
+    const state = telemetry.state;
+    const readings: Record<string, [number, string]> = {
+      CPU: [state.cpu, Math.round(state.cpu * 100) + '%'],
+      GPU: [state.gpu, Math.round(state.gpu * 100) + '%'],
+      FAN: [Math.min(state.rpm / 2150, 1), Math.round(state.rpm) + ' rpm'],
+      TEMP: [Math.min((state.tempCpu - 30) / 55, 1), Math.round(state.tempCpu) + '°C'],
+    };
+
+    for (const [label, row] of this.telemetryRows) {
+      const [fraction, text] = readings[label];
+      const fill = row.querySelector('.telemetry__fill') as HTMLElement | null;
+      const value = row.querySelector('.telemetry__value') as HTMLElement | null;
+      if (fill) fill.style.transform = `scaleX(${Math.min(Math.max(fraction, 0), 1).toFixed(3)})`;
+      if (value) value.textContent = text;
+    }
   }
 
   destroy() {
+    this.disposeCaseCam();
     this.time.destroy();
     this.sizes.destroy();
     this.camera.destroy();
@@ -361,6 +644,11 @@ const ICON_SOUND = svg(
 
 const ICON_MUTED = svg(
   '<path d="M11 5 6.5 8.8H3.4v6.4h3.1L11 19z"/><path d="m16 9.5 5 5"/><path d="m21 9.5-5 5"/>',
+);
+
+const ICON_VIEW = svg(
+  '<rect x="3" y="5.5" width="13" height="9.5" rx="1.6"/>' +
+    '<path d="M16 9.2 21 6.6v10.8L16 14.8z"/><path d="M6.5 19h7"/>',
 );
 
 const ICON_RESET = svg(

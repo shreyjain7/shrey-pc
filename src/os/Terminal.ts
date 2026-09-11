@@ -406,23 +406,29 @@ const commands: Record<string, Command> = {
       print(pad('SUBJECT', 8) + pad('SEEN', 10) + pad('PCT', 8) + 'VERDICT');
 
       for (const view of attendanceView()) {
-        const verdict = view.safe
-          ? `can miss ${view.canSkip} more`
-          : `attend ${view.mustAttend} in a row`;
+        const verdict = !view.recorded
+          ? 'nothing logged'
+          : view.safe
+            ? `can miss ${view.canSkip} more`
+            : `attend ${view.mustAttend} in a row`;
         print(
           pad(view.subject.short, 8) +
             pad(`${view.attended}/${view.held}`, 10) +
-            pad(view.percent.toFixed(1) + '%', 8) +
+            pad(view.recorded ? view.percent.toFixed(1) + '%' : '—', 8) +
             verdict,
           view.safe ? undefined : 'out--warn',
         );
       }
 
       print('');
-      print(
-        `Overall ${overall.percent.toFixed(1)}% — minimum ${semester.minimumAttendance}%`,
-        overall.percent >= semester.minimumAttendance ? 'out--accent' : 'out--warn',
-      );
+      if (overall.held === 0) {
+        print(`Nothing logged yet — minimum is ${semester.minimumAttendance}%`);
+      } else {
+        print(
+          `Overall ${overall.percent.toFixed(1)}% — minimum ${semester.minimumAttendance}%`,
+          overall.percent >= semester.minimumAttendance ? 'out--accent' : 'out--warn',
+        );
+      }
     },
   },
 

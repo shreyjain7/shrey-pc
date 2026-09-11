@@ -138,9 +138,14 @@ function renderHome(api: PageApi) {
 
   const attendanceChip = el('button', 'web-strip__chip');
   attendanceChip.type = 'button';
-  attendanceChip.classList.toggle('is-risk', overall.percent < semester.minimumAttendance);
+  attendanceChip.classList.toggle(
+    'is-risk',
+    overall.held > 0 && overall.percent < semester.minimumAttendance,
+  );
   attendanceChip.append(el('span', 'web-strip__label', 'Attendance'));
-  attendanceChip.append(el('span', 'web-strip__value', overall.percent.toFixed(1) + '%'));
+  attendanceChip.append(
+    el('span', 'web-strip__value', overall.held > 0 ? overall.percent.toFixed(1) + '%' : '—'),
+  );
   attendanceChip.addEventListener('click', () => api.navigate('shrey://timetable'));
   strip.append(attendanceChip);
 

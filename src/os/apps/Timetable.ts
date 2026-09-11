@@ -1,6 +1,7 @@
 import {
   ATTENDANCE,
   DAYS,
+  EXAMS,
   GRID,
   PERIODS,
   SUBJECTS,
@@ -126,7 +127,9 @@ export function renderWeekGrid(highlightToday = true) {
         if (slot.kind !== 'lecture') {
           cell.append(el('span', 'tt-grid__kind', slot.kind === 'lab' ? 'LAB' : 'TUT'));
         }
-        cell.title = `${subject?.name ?? slot.subject}\n${subject?.faculty ?? ''}\n${slot.room ?? ''}`;
+        cell.title = [subject?.name ?? slot.subject, subject?.faculty, slot.room]
+          .filter(Boolean)
+          .join('\n');
       }
 
       table.append(cell);
@@ -136,7 +139,11 @@ export function renderWeekGrid(highlightToday = true) {
   return table;
 }
 
-/** The subject legend — code, full name, faculty, credits. */
+/**
+ * The subject legend. Faculty and credits are optional in the data — the
+ * published timetable does not carry them — so the sub-line is assembled from
+ * whatever is actually known rather than printing holes.
+ */
 export function renderSubjectKey() {
   const list = el('div', 'tt-key');
 
@@ -148,12 +155,39 @@ export function renderSubjectKey() {
 
     const meta = el('div', 'tt-key__meta');
     meta.append(el('span', 'tt-key__name', subject.name));
-    meta.append(el('span', 'tt-key__sub', `${subject.code} · ${subject.faculty} · ${subject.credits} cr`));
+
+    // Where the class meets is the useful fact when faculty is unknown.
+    const rooms = [
+      ...new Set(
+        DAYS.flatMap((day) =>
+          PERIODS.map((period) => GRID[day.id][period.id]).filter(
+            (slot) => slot?.subject === subject.code && slot.room,
+          ),
+        ).map((slot) => slot!.room!),
+      ),
+    ];
+
+    const sub = [subject.faculty, subject.credits ? `${subject.credits} cr` : '', rooms.join(' · ')]
+      .filter(Boolean)
+      .join(' · ');
+    if (sub) meta.append(el('span', 'tt-key__sub', sub));
     row.append(meta);
 
     list.append(row);
   }
 
+  return list;
+}
+
+/** The internal-assessment windows, from the published academic calendar. */
+export function renderExamWindows() {
+  const list = el('div', 'tt-exams');
+  for (const exam of EXAMS) {
+    const card = el('div', 'tt-exams__card');
+    card.append(el('span', 'tt-exams__tag', exam.label));
+    card.append(el('span', 'tt-exams__range', exam.range));
+    list.append(card);
+  }
   return list;
 }
 
@@ -210,15 +244,32 @@ export function renderAttendance(
   const summary = el('div', 'tt-summary');
   summary.classList.toggle('is-risk', overall.percent < semester.minimumAttendance);
 
+  const started = overall.held > 0;
+
   const headline = el('div', 'tt-summary__figure');
-  headline.append(el('span', 'tt-summary__percent', overall.percent.toFixed(1) + '%'));
   headline.append(
-    el('span', 'tt-summary__caption', `${overall.attended} of ${overall.held} classes attended`),
+    el('span', 'tt-summary__percent', started ? overall.percent.toFixed(1) + '%' : '—'),
+  );
+  headline.append(
+    el(
+      'span',
+      'tt-summary__caption',
+      started ? `${overall.attended} of ${overall.held} classes attended` : 'Nothing logged yet',
+    ),
   );
   summary.append(headline);
 
   const note = el('div', 'tt-summary__note');
-  if (atRisk.length) {
+  if (!started) {
+    note.append(el('strong', undefined, 'Start marking to see where you stand'));
+    note.append(
+      el(
+        'span',
+        undefined,
+        `Use Present and Absent on each subject below. The institute's minimum is ${semester.minimumAttendance}%.`,
+      ),
+    );
+  } else if (atRisk.length) {
     note.append(el('strong', undefined, `${atRisk.length} subject${atRisk.length > 1 ? 's' : ''} below ${semester.minimumAttendance}%`));
     note.append(
       el('span', undefined, atRisk.map((view) => view.subject.short).join(', ')),
@@ -243,11 +294,17 @@ export function renderAttendance(
     const body = el('div', 'tt-subject__body');
     body.append(el('h3', 'tt-subject__name', view.subject.name));
     body.append(
-      el('p', 'tt-subject__meta', `${view.subject.code} · ${view.attended}/${view.held} attended`),
+      el(
+        'p',
+        'tt-subject__meta',
+        view.recorded ? `${view.attended}/${view.held} attended` : 'No classes logged',
+      ),
     );
 
     const verdict = el('p', 'tt-subject__verdict');
-    if (view.safe) {
+    if (!view.recorded) {
+      verdict.textContent = 'Mark a class to start tracking this one.';
+    } else if (view.safe) {
       verdict.textContent =
         view.canSkip > 0
           ? `You can miss ${view.canSkip} more and stay above ${semester.minimumAttendance}%.`
@@ -505,6 +562,8 @@ export function createTimetable(): HTMLElement {
     else if (view === 'week') {
       page.append(renderWeekGrid());
       page.append(renderSubjectKey());
+      page.append(el('h3', 'tt__heading', 'Internal assessments'));
+      page.append(renderExamWindows());
     } else page.append(renderAttendance(records, adjust));
 
     body.replaceChildren(page);

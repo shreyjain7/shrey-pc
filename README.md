@@ -236,11 +236,17 @@ counts. The app, the browser's timetable page, the `next` / `today` /
 `attendance` shell commands and `~/Documents/timetable.txt` all read from it, so
 they update together.
 
-The subject list is taken from the coursework already in `cv.ts`. **The slot
-grid, room numbers, faculty initials and attendance counts are structure, not a
-transcript** — swap in the real ones. Attendance edits made in the app are
-written to `localStorage` over the top of the seed, so marking yourself present
-survives a reload without touching the file.
+The grid is transcribed from the timetable published on
+[shreyjain.in](https://shreyjain.in) — VII semester CSE at the School of
+Computer Engineering, MIT Manipal — along with its room numbers and the IA
+windows. Faculty names and credit counts are deliberately absent: the source
+does not carry them, and both fields are optional rather than filled with
+plausible-looking guesses.
+
+Attendance starts at zero and is not seeded. Marking yourself present or absent
+in the app writes to `localStorage` over the top, so it survives a reload
+without touching the file; until something is logged, the app and the
+`attendance` command both say so rather than reporting a meaningless 100%.
 
 To swap the downloadable PDF, replace `public/Shrey_Jain_Resume.pdf` (keep the
 filename, or update `resumePath` at the bottom of `cv.ts`).

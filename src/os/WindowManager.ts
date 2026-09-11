@@ -43,6 +43,13 @@ interface ManagedWindow {
 
 const TASKBAR_HEIGHT = 56;
 const CASCADE_STEP = 34;
+/**
+ * The menu bar owns the top strip of the desktop. Windows have to start below
+ * it: a title bar underneath the menu bar cannot be grabbed, which leaves the
+ * window stuck where it opened.
+ */
+const MENUBAR_HEIGHT = 30;
+const TOP_MARGIN = MENUBAR_HEIGHT + 10;
 
 /** Lower bound wins when the box is smaller than the window plus its margins. */
 const clamp = (value: number, min: number, max: number) => Math.max(Math.min(value, max), min);
@@ -114,7 +121,11 @@ export class WindowManager {
       const width = Math.min(Math.max(entry.app.width, 280), box.width - 32);
       const height = Math.min(Math.max(entry.app.height, 180), maxHeight - 32);
       const left = clamp(entry.root.offsetLeft, 16, Math.max(16, box.width - width - 16));
-      const top = clamp(entry.root.offsetTop, 16, Math.max(16, maxHeight - height - 16));
+      const top = clamp(
+        entry.root.offsetTop,
+        TOP_MARGIN,
+        Math.max(TOP_MARGIN, maxHeight - height - 16),
+      );
 
       entry.root.style.width = width + 'px';
       entry.root.style.height = height + 'px';
@@ -261,8 +272,8 @@ export class WindowManager {
       ? 12
       : clamp(
           Math.round((box.height - TASKBAR_HEIGHT - height) / 2 - 40 + offset),
-          16,
-          box.height - TASKBAR_HEIGHT - height - 16,
+          TOP_MARGIN,
+          Math.max(TOP_MARGIN, box.height - TASKBAR_HEIGHT - height - 16),
         );
 
     const root = document.createElement('section');

@@ -16,33 +16,12 @@ import { WindowManager } from './WindowManager';
 
 export type OSState = 'standby' | 'booting' | 'desktop' | 'halting';
 
+/** One line of the shutdown log, and the pause before printing it. */
 interface BootLine {
   text: string;
   delay: number;
   className?: string;
-  ram?: boolean;
 }
-
-const RAM_TOTAL = 65536;
-
-const BOOT_LINES: BootLine[] = [
-  { text: 'SJBIOS (C)2000 Jain Systems Inc.,', delay: 0, className: 'boot__line--bright' },
-  { text: 'HSP S13 2000-2026 Special UC131S', delay: 70 },
-  { text: 'Released: 09/09/2026', delay: 70 },
-  { text: '', delay: 40 },
-  { text: 'Main Processor : Shrey Jain, B.Tech CSE', delay: 150 },
-  { text: 'Manipal Institute of Technology  2023-2027', delay: 130 },
-  { text: '', delay: 40 },
-  { text: 'Memory Test : 0K OK', delay: 90, ram: true },
-  { text: '', delay: 900 },
-  { text: 'Detecting IDE Primary Master   ... PYTHON', delay: 130 },
-  { text: 'Detecting IDE Primary Slave    ... C', delay: 100 },
-  { text: 'Detecting IDE Secondary Master ... MYSQL', delay: 100 },
-  { text: 'Detecting IDE Secondary Slave  ... GIT', delay: 100 },
-  { text: '', delay: 60 },
-  { text: 'Mounting /home/shrey ... OK', delay: 170 },
-  { text: 'Starting shrey-os 1.0 ...', delay: 220, className: 'boot__line--accent' },
-];
 
 const SHUTDOWN_LINES: BootLine[] = [
   { text: 'shrey-os: received SIGTERM', delay: 0, className: 'boot__line--bright' },
@@ -121,7 +100,6 @@ export class OS {
   private selected: string | null = null;
   private timers: number[] = [];
   private clockTimer = 0;
-  private ramTimer = 0;
   private stopMotion: Array<() => void> = [];
   /** Which room camera the shell believes it is being viewed from. */
   private view: 'room' | 'workstation' | 'screen' = 'screen';
@@ -889,38 +867,26 @@ export class OS {
   /* Lifecycle                                                               */
   /* ---------------------------------------------------------------------- */
 
+  /**
+   * Wake straight to the desktop.
+   *
+   * There used to be a POST here — a BIOS banner, a ticking memory count, IDE
+   * detection — which reads well once and then costs three seconds on every
+   * visit after that. The CRT's switch-on flash stays, because that is the
+   * machine coming to life rather than something to sit through.
+   */
   powerOn() {
     if (this.state !== 'standby') return;
     this.state = 'booting';
 
     this.standby.classList.remove('is-visible');
-    this.boot.classList.add('is-visible');
-    this.boot.replaceChildren();
     this.brightness = 0.55;
     this.audio.degauss();
-
-    let elapsed = 0;
-    for (const entry of BOOT_LINES) {
-      elapsed += entry.delay;
-      this.timers.push(
-        window.setTimeout(() => {
-          const line = el('div', 'boot__line' + (entry.className ? ' ' + entry.className : ''));
-          line.textContent = entry.text === '' ? ' ' : entry.text;
-          this.boot.append(line);
-          if (entry.ram) this.countRam(line);
-          this.boot.scrollTop = this.boot.scrollHeight;
-        }, elapsed),
-      );
-    }
-
-    this.timers.push(
-      window.setTimeout(() => this.root.classList.add('is-switching'), elapsed + 420),
-    );
+    this.root.classList.add('is-switching');
 
     this.timers.push(
       window.setTimeout(() => {
         this.root.classList.remove('is-switching');
-        this.boot.classList.remove('is-visible');
         this.desktop.classList.add('is-visible');
         this.state = 'desktop';
         this.brightness = 1;
@@ -933,7 +899,7 @@ export class OS {
         // Open with something to read rather than a bare desktop.
         this.manager.open(appsById.get('showcase')!);
         notify('Welcome', 'Right-click the desktop, or open the Terminal.');
-      }, elapsed + 620),
+      }, 280),
     );
   }
 
@@ -993,15 +959,6 @@ export class OS {
     );
   }
 
-  /** The classic POST memory count, ticking up in place. */
-  private countRam(line: HTMLElement) {
-    let value = 0;
-    this.ramTimer = window.setInterval(() => {
-      value = Math.min(value + 4096, RAM_TOTAL);
-      line.textContent = 'Memory Test : ' + value + 'K OK';
-      if (value >= RAM_TOTAL) window.clearInterval(this.ramTimer);
-    }, 45);
-  }
 
   setInteractive(interactive: boolean) {
     this.root.classList.toggle('is-interactive', interactive);
@@ -1038,7 +995,6 @@ export class OS {
   destroy() {
     for (const timer of this.timers) window.clearTimeout(timer);
     window.clearInterval(this.clockTimer);
-    window.clearInterval(this.ramTimer);
     for (const stop of this.stopMotion) stop();
     this.stopMotion = [];
     telemetry.setPowered(false);

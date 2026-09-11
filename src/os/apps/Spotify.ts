@@ -47,15 +47,17 @@ interface Entry {
 
 const LIBRARY_KEY = 'shrey-pc:spotify:library';
 const CURRENT_KEY = 'shrey-pc:spotify:current';
+/** The seed the stored library was built from, so a new one can replace it. */
+const SEED_KEY = 'shrey-pc:spotify:seed';
 /** What the app stored when it held a single link rather than a library. */
 const LEGACY_KEY = 'shrey-pc:spotify:uri';
 
 /**
- * One starting point so the window is never empty. Spotify is unreachable
- * from where this was written, so the title is filled in by the listener's
- * own browser rather than asserted here — and a row nobody wants is one ✕.
+ * Shrey's own playlist, so the window opens on his music rather than nothing.
+ * The title is filled in by the listener's browser — Spotify is unreachable
+ * from where this was written — and a row nobody wants is one ✕.
  */
-const SEED: Entry[] = [{ kind: 'playlist', id: '37i9dQZF1DXcBWIGoYBM5M', label: 'Playlist' }];
+const SEED: Entry[] = [{ kind: 'playlist', id: '53pviDxS74oGZEtfHuzvRw', label: 'Playlist' }];
 
 const KINDS = 'track|album|artist|playlist|episode|show';
 
@@ -104,6 +106,45 @@ const keyOf = (entry: Entry) => entry.kind + ':' + entry.id;
 /* Storage                                                                     */
 /* -------------------------------------------------------------------------- */
 
+/**
+ * Swaps in a new seed without touching what the listener added.
+ *
+ * A library that already exists is never rebuilt, so a changed seed would
+ * otherwise only ever reach first-time visitors. Rows from the seed this
+ * build replaces are dropped — they were put there, not chosen — and rows
+ * from the current seed are added if they are missing. Everything else is
+ * left exactly where it is.
+ */
+function reseed(saved: Entry[]): Entry[] {
+  const now = SEED.map(keyOf).join(',');
+
+  let before = '';
+  try {
+    before = localStorage.getItem(SEED_KEY) ?? '';
+  } catch {
+    // No record of an earlier seed; treat the library as all theirs.
+  }
+
+  if (before === now) return saved;
+
+  const retired = new Set(before.split(',').filter(Boolean));
+  for (const key of SEED.map(keyOf)) retired.delete(key);
+
+  const kept = saved.filter((entry) => !retired.has(keyOf(entry)));
+  const have = new Set(kept.map(keyOf));
+  const added = SEED.filter((entry) => !have.has(keyOf(entry)));
+
+  const next = [...added, ...kept];
+  writeLibrary(next);
+  try {
+    localStorage.setItem(SEED_KEY, now);
+  } catch {
+    // It will simply be tried again next time.
+  }
+
+  return next;
+}
+
 function readLibrary(): Entry[] {
   let saved: Entry[] | null = null;
 
@@ -114,7 +155,7 @@ function readLibrary(): Entry[] {
     // Corrupt or unavailable; fall through to the seed.
   }
 
-  if (Array.isArray(saved) && saved.length) return saved;
+  if (Array.isArray(saved) && saved.length) return reseed(saved);
 
   // Carry over whatever the single-link version was last playing.
   try {
@@ -123,6 +164,12 @@ function readLibrary(): Entry[] {
     if (entry) return [entry, ...SEED.filter((seed) => keyOf(seed) !== keyOf(entry))];
   } catch {
     // Nothing to carry over.
+  }
+
+  try {
+    localStorage.setItem(SEED_KEY, SEED.map(keyOf).join(','));
+  } catch {
+    // Unavailable storage; the seed is applied fresh every visit anyway.
   }
 
   return [...SEED];

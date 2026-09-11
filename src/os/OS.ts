@@ -78,7 +78,8 @@ const MENU_ICONS = {
 
 const DESKTOP_DIR = join(HOME, 'Desktop');
 
-/** Pinned to the dock whether or not they are running, in this order. */
+/** Pinned to the dock whether or not they are running. Membership only — the
+ *  dock lays them out in registry order, so `apps` decides the sequence. */
 const DOCK_APPS = [
   'showcase',
   'search',
@@ -126,6 +127,8 @@ export class OS {
   private view: 'room' | 'workstation' | 'screen' = 'screen';
   private viewButton!: HTMLButtonElement;
   private appName!: HTMLElement;
+  /** Dock buttons by app id, reused across syncs. */
+  private dockButtons = new Map<string, HTMLElement>();
 
   constructor(
     private audio: Audio,
@@ -718,8 +721,15 @@ export class OS {
     dock.addEventListener('pointerleave', () => apply(null));
   }
 
+  /**
+   * Reconciles the dock rather than rebuilding it.
+   *
+   * This runs on every focus change, and the dock lives inside the CSS3D
+   * projection — replacing eleven buttons each time re-rasters the whole
+   * screen for what is usually a single class flip. Reusing the nodes also
+   * lets a launch animation survive the sync that follows the click.
+   */
   private syncTaskbar() {
-    this.taskbarApps.replaceChildren();
     const focused = this.manager.focusedId;
     // The system monitor's process table reads this off the screen root.
     this.root.dataset.running = this.manager.running.join(',');
@@ -732,30 +742,59 @@ export class OS {
     const shown = apps.filter(
       (app) => DOCK_APPS.includes(app.id) || this.manager.isOpen(app.id),
     );
+    const wanted = new Set(shown.map((app) => app.id));
 
-    for (const app of shown) {
-      const open = this.manager.isOpen(app.id);
-
-      const button = el('button', 'dock__app');
-      button.type = 'button';
-      button.dataset.app = app.id;
-      button.title = app.title;
-      button.classList.toggle('is-active', focused === app.id);
-      button.classList.toggle('is-open', open);
-      button.classList.toggle('is-minimised', this.manager.isMinimised(app.id));
-      button.innerHTML =
-        '<span class="dock__icon">' + app.icon + '</span>' +
-        '<span class="dock__label">' + app.title + '</span>' +
-        '<span class="dock__dot"></span>';
-
-      button.addEventListener('click', () => {
-        this.audio.click();
-        if (open) this.manager.toggle(app);
-        else this.manager.open(app);
-      });
-
-      this.taskbarApps.append(button);
+    for (const [id, node] of this.dockButtons) {
+      if (wanted.has(id)) continue;
+      node.remove();
+      this.dockButtons.delete(id);
     }
+
+    shown.forEach((app, index) => {
+      let button = this.dockButtons.get(app.id);
+
+      if (!button) {
+        const created = el('button', 'dock__app');
+        created.type = 'button';
+        created.dataset.app = app.id;
+        created.title = app.title;
+        created.innerHTML =
+          '<span class="dock__icon">' + app.icon + '</span>' +
+          '<span class="dock__label">' + app.title + '</span>' +
+          '<span class="dock__dot"></span>';
+
+        created.addEventListener('click', () => {
+          this.audio.click();
+          if (this.manager.isOpen(app.id)) {
+            this.manager.toggle(app);
+            return;
+          }
+          // Bounce while it launches, the way the dock being imitated does.
+          // Removing the class and reading offsetWidth restarts the animation
+          // when the same icon is clicked again.
+          created.classList.remove('is-launching');
+          void created.offsetWidth;
+          created.classList.add('is-launching');
+          this.manager.open(app);
+        });
+
+        created.addEventListener('animationend', () =>
+          created.classList.remove('is-launching'),
+        );
+
+        this.dockButtons.set(app.id, created);
+        button = created;
+      }
+
+      button.classList.toggle('is-active', focused === app.id);
+      button.classList.toggle('is-open', this.manager.isOpen(app.id));
+      button.classList.toggle('is-minimised', this.manager.isMinimised(app.id));
+
+      // Keep DOM order matching the favourites order as running apps come and go.
+      if (this.taskbarApps.children[index] !== button) {
+        this.taskbarApps.insertBefore(button, this.taskbarApps.children[index] ?? null);
+      }
+    });
   }
 
   private tickClock = () => {

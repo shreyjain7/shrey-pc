@@ -3366,12 +3366,50 @@
   transform: scale(1.08);
 }
 
-/* The desktop icons clear the menu bar above and the dock below. The window
-   layer is deliberately left alone: WindowManager measures and clamps against
-   that box, so insetting it here would place windows off the surface. */
+/* Desktop icons run down the right edge and wrap into new columns leftward,
+   clearing the menu bar above and the dock below. The window layer is
+   deliberately left alone: WindowManager measures and clamps against that box,
+   so insetting it here would place windows off the surface. */
 .icons {
-  padding-top: 40px;
-  padding-bottom: 84px;
+  /* Starts well below the menu bar: the page's own camera and sound controls
+     float over the viewport's top-right corner, and at the focused camera pose
+     they land on top of this grid's first row. */
+  top: 84px;
+  left: auto;
+  right: 16px;
+  bottom: 96px;
+  grid-auto-flow: column;
+  grid-template-columns: none;
+  grid-template-rows: repeat(auto-fill, 88px);
+  grid-auto-columns: 104px;
+  justify-content: end;
+  align-content: start;
+}
+
+/* --- Dock launch bounce --------------------------------------------------
+   Animates `translate`, not `transform`: the icon's transform already carries
+   the magnification scale, and a keyframe on it would cancel that mid-bounce. */
+
+.dock__app.is-launching .dock__icon {
+  animation: dock-bounce 0.62s cubic-bezier(0.28, 0.84, 0.42, 1);
+}
+
+@keyframes dock-bounce {
+  0% {
+    translate: 0 0;
+  }
+  40% {
+    translate: 0 -22px;
+  }
+  62% {
+    translate: 0 0;
+  }
+  80% {
+    translate: 0 -7px;
+  }
+  100% {
+    translate: 0 0;
+  }
 }
 
 /* Menus and popovers get the same frosted treatment. */

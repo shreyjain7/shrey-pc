@@ -29,9 +29,6 @@ export class Experience {
   private readonly ui: HTMLElement;
   private loader!: HTMLElement;
   private loaderFill!: HTMLElement;
-  private loaderLog!: HTMLElement;
-  private loaderCount!: HTMLElement;
-  private startButton!: HTMLButtonElement;
   private soundButton!: HTMLButtonElement;
 
   private overlay!: HTMLElement;
@@ -97,59 +94,45 @@ export class Experience {
   /* Loading                                                                 */
   /* ---------------------------------------------------------------------- */
 
-  private log(text: string, className?: string) {
-    const line = document.createElement('div');
-    line.className = 'loader__line' + (className ? ' ' + className : '');
-    line.textContent = text;
-    this.loaderLog.append(line);
-    this.loaderLog.scrollTop = this.loaderLog.scrollHeight;
-  }
-
   private async load() {
     const steps = this.world.steps();
     // The scene steps plus the shader compile at the end.
     const total = steps.length + 1;
     let done = 0;
 
-    const advance = (name: string) => {
+    const advance = () => {
       done += 1;
-      this.loaderCount.textContent = `LOADING RESOURCES (${done}/${total})`;
       this.loaderFill.style.transform = `scaleX(${done / total})`;
-      this.log('Loaded  ' + name);
     };
 
     for (const step of steps) {
       // Yield so the loader actually paints between chunks of work.
       await nextFrame();
       step.run();
-      advance(step.name);
+      advance();
     }
 
     await nextFrame();
     // The only genuinely slow part: uploading programs to the GPU.
     await this.renderer.webgl.compileAsync(this.scene, this.camera.instance);
-    advance('shaders.compiled');
+    advance();
 
-    this.log('');
-    this.log('FINISHED LOADING RESOURCES', 'loader__line--accent');
-
-    this.loader.classList.add('is-armed');
-    this.startButton.disabled = false;
-    this.startButton.focus();
+    // Straight into the room — there is nothing left to wait for, so making
+    // someone click past a finished progress bar is pure friction.
+    this.start();
   }
 
-  /** The start gate. Doubles as the gesture that lets audio play. */
+  /**
+   * Hands the room over as soon as the last resource lands.
+   *
+   * Audio is *not* unlocked here: browsers only allow an AudioContext to make
+   * sound after a real user gesture, and there is no longer a button to supply
+   * one. `armAudio` below waits for the visitor's first interaction instead.
+   */
   private start = () => {
-    if (!this.startButton || this.startButton.disabled) return;
-    this.startButton.disabled = true;
+    if (this.ready) return;
 
-    this.log('All Content Loaded, launching', 'loader__line--accent');
-
-    this.audio.unlock();
-    this.audio.startHum();
-    this.audio.setHumLevel(0.35);
-    this.audio.click();
-
+    this.armAudio();
     this.loader.classList.add('is-done');
     document.body.classList.remove('is-loading');
     document.body.classList.add('is-ready');
@@ -161,6 +144,26 @@ export class Experience {
 
     track('experience_started', { quality: this.sizes.quality });
   };
+
+  /**
+   * Starts the audio on the visitor's first gesture, whatever it happens to be.
+   *
+   * Every listener removes itself, so this costs nothing after it fires once —
+   * and if the visitor never interacts, the page is simply silent rather than
+   * throwing on a blocked AudioContext.
+   */
+  private armAudio() {
+    const events = ['pointerdown', 'keydown', 'touchstart'] as const;
+
+    const unlock = () => {
+      for (const type of events) window.removeEventListener(type, unlock);
+      this.audio.unlock();
+      this.audio.startHum();
+      this.audio.setHumLevel(this.view === 'room' ? 0.35 : 1);
+    };
+
+    for (const type of events) window.addEventListener(type, unlock, { once: false });
+  }
 
   /* ---------------------------------------------------------------------- */
   /* Navigation                                                              */
@@ -411,31 +414,15 @@ export class Experience {
     loaderRole.textContent = profile.role;
     head.append(loaderName, loaderRole);
 
-    this.loaderLog = document.createElement('div');
-    this.loaderLog.className = 'loader__log';
-
-    this.loaderCount = document.createElement('p');
-    this.loaderCount.className = 'loader__count';
-    this.loaderCount.textContent = 'LOADING RESOURCES (0/7)';
-
+    // Just a name and a progress bar. The room takes over the moment the last
+    // resource lands, so there is nothing here to read or click.
     const bar = document.createElement('div');
     bar.className = 'loader__bar';
     this.loaderFill = document.createElement('div');
     this.loaderFill.className = 'loader__fill';
     bar.append(this.loaderFill);
 
-    this.startButton = document.createElement('button');
-    this.startButton.type = 'button';
-    this.startButton.className = 'loader__start';
-    this.startButton.textContent = 'START';
-    this.startButton.disabled = true;
-    this.startButton.addEventListener('click', this.start);
-
-    const startHint = document.createElement('p');
-    startHint.className = 'loader__hint';
-    startHint.textContent = 'Click start to begin';
-
-    this.loader.append(head, this.loaderLog, this.loaderCount, bar, this.startButton, startHint);
+    this.loader.append(head, bar);
 
     /* --- Idle chrome ------------------------------------------------------- */
     const brand = document.createElement('div');

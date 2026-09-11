@@ -1,9 +1,9 @@
 # shrey-pc
 
 An interactive 3D portfolio for **Shrey Jain** — a workstation sitting on a desk
-in a dark room. Wait for the resource counter, press START, then click the
-monitor: the camera flies in, the machine runs a POST, and the CV turns out to be
-a small operating system you can actually use.
+in a dark room. It loads straight in, no splash to click past. Click the monitor
+and the camera flies in, the machine runs a POST, and the CV turns out to be a
+small operating system you can actually use.
 
 It is not just the screen. The **tower beside it is a real machine**: a
 glass-panelled case whose fans spin at a speed derived from the load the OS is

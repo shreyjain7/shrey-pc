@@ -122,43 +122,6 @@ body.is-hovering-monitor #webgl {
   color: var(--ui-accent);
 }
 
-/* The POST-style scroll of what actually got built. */
-.loader__log {
-  width: min(420px, 100%);
-  height: 148px;
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-  justify-content: flex-end;
-  font-size: 11.5px;
-  line-height: 1.75;
-  color: #6f7f93;
-}
-
-.loader__line {
-  white-space: pre;
-  animation: loader-line-in 140ms ease-out;
-}
-
-.loader__line--accent {
-  color: var(--ui-accent);
-}
-
-@keyframes loader-line-in {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
-}
-
-.loader__count {
-  font-size: 10.5px;
-  letter-spacing: 2.6px;
-  color: var(--ui-dim);
-}
-
 .loader__bar {
   position: relative;
   width: min(260px, 70vw);
@@ -175,62 +138,6 @@ body.is-hovering-monitor #webgl {
   background: var(--ui-accent);
   box-shadow: 0 0 12px rgba(95, 208, 255, 0.7);
   transition: transform 260ms ease;
-}
-
-.loader__start {
-  margin-top: 6px;
-  padding: 13px 40px;
-  border: 1px solid rgba(95, 208, 255, 0.5);
-  border-radius: 4px;
-  background: rgba(95, 208, 255, 0.1);
-  color: #d8f1ff;
-  font-family: inherit;
-  font-size: 13px;
-  letter-spacing: 5px;
-  cursor: pointer;
-  opacity: 0;
-  visibility: hidden;
-  transform: translateY(6px);
-  transition: opacity 400ms ease, transform 400ms ease, visibility 400ms,
-    background 160ms ease;
-}
-
-.loader.is-armed .loader__start {
-  opacity: 1;
-  visibility: visible;
-  transform: none;
-  animation: start-pulse 2.4s ease-in-out infinite;
-}
-
-.loader__start:hover:not(:disabled) {
-  background: rgba(95, 208, 255, 0.22);
-}
-
-.loader__start:disabled {
-  cursor: default;
-}
-
-@keyframes start-pulse {
-  0%,
-  100% {
-    box-shadow: 0 0 0 rgba(95, 208, 255, 0);
-  }
-  50% {
-    box-shadow: 0 0 22px rgba(95, 208, 255, 0.35);
-  }
-}
-
-.loader__hint {
-  font-size: 10px;
-  letter-spacing: 2.6px;
-  text-transform: uppercase;
-  color: #4a586b;
-  opacity: 0;
-  transition: opacity 400ms ease;
-}
-
-.loader.is-armed .loader__hint {
-  opacity: 1;
 }
 
 /* --- Screen-space UI ---------------------------------------------------- */
@@ -480,27 +387,14 @@ body.is-ready .ui-panel--always {
     letter-spacing: 1.4px;
   }
 
-  .loader__log {
-    height: 108px;
-    font-size: 10px;
-  }
-
   .loader__name {
     font-size: 12px;
     letter-spacing: 5px;
-  }
-
-  .loader__start {
-    padding: 14px 44px;
-    font-size: 12px;
   }
 }
 
 /* In landscape on a phone there is no vertical room for the log at all. */
 @media (pointer: coarse) and (max-height: 480px) {
-  .loader__log {
-    display: none;
-  }
 
   .loader {
     gap: 12px;
@@ -509,14 +403,6 @@ body.is-ready .ui-panel--always {
   .brand__location,
   .hint {
     display: none;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .hint__dot,
-  .crt__flicker,
-  .loader__start {
-    animation: none;
   }
 }
 

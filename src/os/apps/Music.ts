@@ -41,38 +41,6 @@ const ICON = {
   plus: svg('<path d="M12 5.5v13M5.5 12h13"/>'),
 };
 
-/**
- * Turns any Spotify link or URI into its embed form.
- *
- * Spotify's embed is the only way to play their catalogue on a static site:
- * no key, no backend, no login. An anonymous listener gets 30-second
- * previews; anyone signed into Spotify in that browser gets whole tracks.
- * The Web Playback SDK does play full tracks outright, but it needs each
- * visitor to hold Premium and complete an OAuth round trip, which is not a
- * thing to ask of someone reading a CV.
- */
-export function toSpotifyEmbed(input: string): string | null {
-  const value = input.trim();
-  if (!value) return null;
-
-  const uri = value.match(/^spotify:(track|album|artist|playlist|episode|show):([A-Za-z0-9]+)$/);
-  if (uri) return `https://open.spotify.com/embed/${uri[1]}/${uri[2]}`;
-
-  let url: URL;
-  try {
-    url = new URL(value);
-  } catch {
-    return null;
-  }
-
-  if (!/(^|\.)spotify\.com$/.test(url.hostname)) return null;
-
-  const parts = url.pathname.replace(/^\/embed/, '').split('/').filter(Boolean);
-  if (parts.length < 2) return null;
-
-  return `https://open.spotify.com/embed/${parts[0]}/${parts[1]}`;
-}
-
 interface Track {
   /** The YouTube video id — the only thing actually stored per track. */
   id: string;

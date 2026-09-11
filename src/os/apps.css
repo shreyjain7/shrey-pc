@@ -4215,3 +4215,323 @@
     flex: 1;
   }
 }
+
+
+/* --- Google -------------------------------------------------------------- */
+
+.web--gsearch {
+  padding: 0;
+}
+
+.gsearch__home {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 18px;
+  padding: 56px 28px 40px;
+  text-align: center;
+}
+
+.gsearch__logo {
+  font-size: 54px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1;
+}
+
+.gsearch__mark {
+  flex: 0 0 auto;
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.gsearch__tagline {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--faint);
+}
+
+/* The results header: wordmark and field on one line, as the real one does. */
+.gsearch__head {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px 22px;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.gsearch__bar {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  gap: 8px;
+}
+
+.gsearch__bar--big {
+  width: min(520px, 100%);
+  flex: 0 0 auto;
+}
+
+.gsearch__field {
+  flex: 1;
+  min-width: 0;
+  padding: 9px 15px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  outline: none;
+  transition: border-color 0.16s ease, background 0.16s ease;
+}
+
+.gsearch__field:focus {
+  border-color: #4285f4;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.gsearch__go {
+  padding: 9px 18px;
+  border: 0;
+  border-radius: 999px;
+  background: #4285f4;
+  color: #f7fbff;
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.gsearch__go:hover {
+  background: #5a95f5;
+}
+
+.gsearch__meta,
+.gsearch__note {
+  margin: 0;
+  padding: 12px 22px 0;
+  font-size: 12px;
+  color: var(--faint);
+}
+
+.gsearch__note {
+  padding-top: 4px;
+  color: #e0a458;
+}
+
+/* --- A result ------------------------------------------------------------ */
+
+.gsearch__hit {
+  position: relative;
+  padding: 14px 46px 14px 22px;
+}
+
+.gsearch__hit:hover {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.gsearch__host {
+  margin: 0 0 2px;
+  font-size: 11.5px;
+  color: #7bb0a0;
+}
+
+.gsearch__title {
+  display: block;
+  max-width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: #8ab4f8;
+  font: inherit;
+  font-size: 16px;
+  line-height: 1.35;
+  text-align: left;
+  cursor: pointer;
+}
+
+.gsearch__title:hover {
+  text-decoration: underline;
+}
+
+.gsearch__snippet {
+  margin: 4px 0 0;
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: rgba(255, 255, 255, 0.62);
+}
+
+/* The one-click door out, since the row itself goes to the hand-off card. */
+.gsearch__out {
+  position: absolute;
+  top: 14px;
+  right: 16px;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  color: var(--faint);
+  opacity: 0;
+  transition: opacity 0.14s ease, background 0.14s ease;
+}
+
+.gsearch__hit:hover .gsearch__out {
+  opacity: 1;
+}
+
+.gsearch__out:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--text);
+}
+
+.gsearch__out svg {
+  width: 15px;
+  height: 15px;
+}
+
+.gsearch__local {
+  display: block;
+  margin: 10px 22px 22px;
+  padding: 9px 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  font-size: 12.5px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.gsearch__local:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.gsearch__empty {
+  padding: 34px 22px;
+}
+
+.gsearch__empty-title {
+  margin: 0 0 6px;
+  font-size: 18px;
+}
+
+.gsearch__empty-note {
+  margin: 0 22px;
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: var(--faint);
+}
+
+/* --- Connecting Google --------------------------------------------------- */
+
+.gconnect {
+  display: block;
+  width: min(560px, 100%);
+  margin: 18px 22px 26px;
+  padding: 16px 18px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.03);
+  text-align: left;
+}
+
+.gsearch__home .gconnect {
+  margin-inline: auto;
+}
+
+.gconnect__title {
+  margin: 0 0 6px;
+  font-size: 14px;
+  font-weight: 620;
+}
+
+.gconnect__note {
+  margin: 0 0 12px;
+  font-size: 12px;
+  line-height: 1.75;
+  color: var(--faint);
+}
+
+.gconnect__note code {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  color: var(--text);
+}
+
+.gconnect__row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.gconnect__field {
+  flex: 1 1 190px;
+  min-width: 0;
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 12px;
+  outline: none;
+}
+
+.gconnect__field:focus {
+  border-color: #4285f4;
+}
+
+.gconnect__save {
+  flex: 0 0 auto;
+  padding: 8px 18px;
+  border: 0;
+  border-radius: 7px;
+  background: #4285f4;
+  color: #f7fbff;
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.gconnect__save:hover {
+  background: #5a95f5;
+}
+
+.gconnect__drop {
+  margin-top: 10px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--faint);
+  font: inherit;
+  font-size: 12px;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.gconnect__drop:hover {
+  color: #ff6b6b;
+}
+
+.websearch__note {
+  margin: 0 0 10px;
+  font-size: 12px;
+  color: #e0a458;
+}
+
+@media (max-width: 560px) {
+  .gsearch__head {
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  .gsearch__logo {
+    font-size: 40px;
+  }
+}

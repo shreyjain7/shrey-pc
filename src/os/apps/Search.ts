@@ -1,4 +1,5 @@
 import { telemetry } from '../../world/telemetry';
+import { createGoogleConnect, google, type WebResult } from '../google';
 import { el } from '../ui';
 
 /**
@@ -6,34 +7,22 @@ import { el } from '../ui';
  *
  * Google itself cannot be embedded: it sends `X-Frame-Options` and a CSP
  * `frame-ancestors` that make every browser refuse to render it inside another
- * page, and there is no client-side way around that. So rather than a dead
- * iframe or a link that dumps you into a new tab, this queries APIs that *do*
- * allow cross-origin reads and renders the results here.
+ * page, and there is no client-side way around that. What it will do is hand
+ * over the same index as JSON, so `google.ts` asks for that and this lays the
+ * rows out — real Google results, ranked by Google, in a window on the CRT.
  *
- * Wikipedia's MediaWiki API is the backbone — `origin=*` opts into CORS, and
- * it returns titles, snippets, thumbnails and extracts. DuckDuckGo's Instant
- * Answer endpoint is tried alongside it for definitions and quick facts, but
- * it does not reliably send CORS headers, so it is treated as a bonus: when it
- * fails, the page simply shows Wikipedia's results.
+ * Until those credentials exist the same rows are filled from Wikipedia's API,
+ * which opts into CORS and needs nothing. DuckDuckGo's Instant Answer endpoint
+ * is tried alongside for definitions, but it does not reliably send CORS
+ * headers, so it is a bonus: when it fails the column still stands.
  *
- * Opening a result stays in the window too — the article is fetched and laid
- * out as a reader, so nothing about this app ever leaves the OS.
+ * A Wikipedia result opens as a reader in this window. Anything Google
+ * returned belongs to the real internet, and no site will let itself be
+ * framed, so those open in a real tab.
  */
 
 const WIKI = 'https://en.wikipedia.org';
 const SUGGESTIONS = ['Manipal Institute of Technology', 'Retrieval augmented generation', 'Django', 'Punjabi music'];
-
-interface Result {
-  title: string;
-  snippet: string;
-}
-
-/** MediaWiki returns snippets with <span class="searchmatch"> highlights. */
-function stripHtml(value: string) {
-  const host = document.createElement('div');
-  host.innerHTML = value;
-  return host.textContent ?? '';
-}
 
 export function createSearch(): HTMLElement {
   const root = el('div', 'websearch');
@@ -76,7 +65,13 @@ export function createSearch(): HTMLElement {
     logo.innerHTML = brand.innerHTML;
     home.append(logo);
     home.append(
-      el('p', 'websearch__tagline', 'Wikipedia and DuckDuckGo, read inside the machine.'),
+      el(
+        'p',
+        'websearch__tagline',
+        google.connected
+          ? 'Google’s own index, laid out inside the machine.'
+          : 'Wikipedia and DuckDuckGo, read inside the machine. Connect Google below for the web.',
+      ),
     );
 
     const chips = el('div', 'websearch__chips');
@@ -90,6 +85,7 @@ export function createSearch(): HTMLElement {
       chips.append(chip);
     }
     home.append(chips);
+    home.append(createGoogleConnect(() => renderHome()));
     body.append(home);
   }
 
@@ -102,24 +98,6 @@ export function createSearch(): HTMLElement {
   }
 
   /* --- Fetching --------------------------------------------------------- */
-
-  async function fetchWikipedia(term: string, signal: AbortSignal): Promise<Result[]> {
-    const url =
-      `${WIKI}/w/api.php?action=query&list=search&format=json&origin=*` +
-      `&srlimit=8&srsearch=${encodeURIComponent(term)}`;
-
-    const response = await fetch(url, { signal });
-    if (!response.ok) throw new Error('Wikipedia returned ' + response.status);
-
-    const payload = (await response.json()) as {
-      query?: { search?: Array<{ title: string; snippet: string }> };
-    };
-
-    return (payload.query?.search ?? []).map((hit) => ({
-      title: hit.title,
-      snippet: stripHtml(hit.snippet),
-    }));
-  }
 
   interface Instant {
     heading: string;
@@ -218,6 +196,32 @@ export function createSearch(): HTMLElement {
 
   /* --- Results ---------------------------------------------------------- */
 
+  /**
+   * Wikipedia rows open in the reader below; a row from anywhere else belongs
+   * to the real internet, which will not be framed, so it opens a real tab.
+   */
+  function resultRow(result: WebResult) {
+    const item = el('article', 'websearch__result');
+    const wiki = result.host === 'en.wikipedia.org';
+
+    if (wiki) {
+      const heading = el('button', 'websearch__result-title', result.title);
+      heading.type = 'button';
+      heading.addEventListener('click', () => void openArticle(result.title));
+      item.append(heading);
+    } else {
+      const heading = el('a', 'websearch__result-title', result.title);
+      heading.href = result.url;
+      heading.target = '_blank';
+      heading.rel = 'noreferrer noopener';
+      item.append(heading);
+    }
+
+    item.append(el('span', 'websearch__result-url', result.host));
+    if (result.snippet) item.append(el('p', 'websearch__result-snippet', result.snippet));
+    return item;
+  }
+
   async function search(term: string) {
     const trimmed = term.trim();
     if (!trimmed) {
@@ -235,9 +239,9 @@ export function createSearch(): HTMLElement {
 
     telemetry.process(0.5);
 
-    let results: Result[];
+    let found;
     try {
-      results = await fetchWikipedia(trimmed, controller.signal);
+      found = await google.search(trimmed, controller.signal);
     } catch (error) {
       if (controller.signal.aborted) return;
       renderMessage(
@@ -250,6 +254,7 @@ export function createSearch(): HTMLElement {
 
     if (controller.signal.aborted) return;
 
+    const results = found.results;
     const instant = await fetchInstant(trimmed, controller.signal);
     if (controller.signal.aborted) return;
 
@@ -263,27 +268,17 @@ export function createSearch(): HTMLElement {
     const layout = el('div', 'websearch__layout');
     const column = el('div', 'websearch__results');
     column.append(
-      el('p', 'websearch__count', results.length + ' results · via Wikipedia'),
+      el(
+        'p',
+        'websearch__count',
+        found.engine === 'google' && found.total
+          ? `About ${found.total} results · Google`
+          : results.length + ' results · via Wikipedia',
+      ),
     );
+    if (found.note) column.append(el('p', 'websearch__note', found.note));
 
-    for (const result of results) {
-      const item = el('article', 'websearch__result');
-
-      const heading = el('button', 'websearch__result-title', result.title);
-      heading.type = 'button';
-      heading.addEventListener('click', () => void openArticle(result.title));
-      item.append(heading);
-
-      item.append(
-        el(
-          'span',
-          'websearch__result-url',
-          'en.wikipedia.org › ' + result.title.replace(/\s+/g, '_'),
-        ),
-      );
-      item.append(el('p', 'websearch__result-snippet', result.snippet));
-      column.append(item);
-    }
+    for (const result of results) column.append(resultRow(result));
 
     layout.append(column);
 

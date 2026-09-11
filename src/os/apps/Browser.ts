@@ -12,6 +12,7 @@ import { formatTime, nextClass, overallAttendance, semester } from '../../data/t
 import { telemetry } from '../../world/telemetry';
 import { SPRING, Spring, ease, stagger, tween } from '../anim';
 import { GITHUB_USER, languageColour, languageMix, loadGitHub, type GitHubData } from '../github';
+import { createGoogleConnect, google, type WebResult } from '../google';
 import { el, svg } from '../ui';
 import { renderSubjectKey, renderWeekGrid } from './Timetable';
 
@@ -536,6 +537,144 @@ function renderResumePage(api: PageApi) {
   return root;
 }
 
+/* -------------------------------------------------------------------------- */
+/* Google                                                                      */
+/* -------------------------------------------------------------------------- */
+
+const WORDMARK =
+  '<b style="color:#4285f4">G</b><b style="color:#ea4335">o</b>' +
+  '<b style="color:#fbbc05">o</b><b style="color:#4285f4">g</b>' +
+  '<b style="color:#34a853">l</b><b style="color:#ea4335">e</b>';
+
+function googleBar(api: PageApi, value: string, big: boolean) {
+  const form = el('form', 'gsearch__bar' + (big ? ' gsearch__bar--big' : ''));
+
+  const field = el('input', 'gsearch__field');
+  field.type = 'text';
+  field.spellcheck = false;
+  field.autocomplete = 'off';
+  field.placeholder = 'Search Google';
+  field.value = value;
+  // The browser shell listens for keys too; this field wants its own.
+  field.addEventListener('keydown', (event) => event.stopPropagation());
+
+  const go = el('button', 'gsearch__go', 'Search');
+  go.type = 'submit';
+
+  form.append(field, go);
+  form.addEventListener('submit', (event) => {
+    event.preventDefault();
+    const term = field.value.trim();
+    if (term) api.navigate('shrey://google?q=' + encodeURIComponent(term));
+  });
+
+  if (big) requestAnimationFrame(() => field.focus());
+  return form;
+}
+
+function googleResult(api: PageApi, hit: WebResult) {
+  const row = el('article', 'gsearch__hit');
+
+  const host = el('p', 'gsearch__host', hit.host);
+  row.append(host);
+
+  const title = el('button', 'gsearch__title', hit.title);
+  title.type = 'button';
+  // In-tab, so Back works — the destination is the hand-off card, since no
+  // real site will let itself be framed.
+  title.addEventListener('click', () => api.navigate(hit.url));
+  row.append(title);
+
+  if (hit.snippet) row.append(el('p', 'gsearch__snippet', hit.snippet));
+
+  const out = el('a', 'gsearch__out');
+  out.href = hit.url;
+  out.target = '_blank';
+  out.rel = 'noreferrer noopener';
+  out.title = 'Open in your browser';
+  out.innerHTML = ICON.external;
+  row.append(out);
+
+  return row;
+}
+
+/**
+ * Google, as far as Google allows.
+ *
+ * google.com refuses to be framed, so this asks the Custom Search JSON API
+ * for the same index and lays the rows out here. Without credentials the
+ * rows come from Wikipedia instead and the page says so.
+ */
+async function renderGoogle(api: PageApi) {
+  const root = page('web--gsearch');
+  const query = api.query.trim();
+
+  if (!query) {
+    const home = el('div', 'gsearch__home');
+    const logo = el('div', 'gsearch__logo');
+    logo.innerHTML = WORDMARK;
+    home.append(logo, googleBar(api, '', true));
+
+    home.append(
+      el(
+        'p',
+        'gsearch__tagline',
+        google.connected
+          ? 'Connected. Results come from Google, ranked by Google.'
+          : 'Results come from Wikipedia until Google is connected.',
+      ),
+    );
+
+    home.append(createGoogleConnect(() => api.navigate('shrey://google')));
+    root.append(home);
+    return root;
+  }
+
+  const head = el('div', 'gsearch__head');
+  const logo = el('span', 'gsearch__mark');
+  logo.innerHTML = WORDMARK;
+  head.append(logo, googleBar(api, query, false));
+  root.append(head);
+
+  // The local corpus is still a search worth having; it just is not this one.
+  const local = el('button', 'gsearch__local', 'Search this site for “' + query + '” instead');
+  local.type = 'button';
+  local.addEventListener('click', () => api.navigate('shrey://search?q=' + encodeURIComponent(query)));
+
+  let found;
+  try {
+    found = await google.search(query);
+  } catch (error) {
+    const failed = el('div', 'gsearch__empty');
+    failed.append(el('h2', 'gsearch__empty-title', 'That search did not go through'));
+    failed.append(el('p', 'gsearch__empty-note', (error as Error).message));
+    root.append(failed, local);
+    root.append(createGoogleConnect(() => api.navigate('shrey://google?q=' + encodeURIComponent(query))));
+    return root;
+  }
+
+  const meta = el('p', 'gsearch__meta');
+  meta.textContent =
+    found.engine === 'google' && found.total
+      ? `About ${found.total} results (${found.seconds ?? '—'} seconds)`
+      : `${found.results.length} result${found.results.length === 1 ? '' : 's'} from Wikipedia`;
+  root.append(meta);
+
+  if (found.note) root.append(el('p', 'gsearch__note', found.note));
+
+  for (const hit of found.results) root.append(googleResult(api, hit));
+
+  if (!found.results.length) {
+    root.append(el('p', 'gsearch__empty-note', 'Nothing came back for that.'));
+  }
+
+  root.append(local);
+
+  if (!google.connected) root.append(createGoogleConnect(() => api.navigate('shrey://google?q=' + encodeURIComponent(query))));
+
+  return root;
+}
+
 /** The hand-off card for an address this browser cannot render itself. */
 function renderExternal(url: string) {
   const root = page('web--external');
@@ -599,7 +738,8 @@ const SITES: Record<string, Site> = {
   resume: { title: 'Resume', glyph: '▤', render: renderResumePage },
   timetable: { title: 'Timetable & Attendance', glyph: '▦', render: renderTimetablePage },
   github: { title: `${GITHUB_USER} · GitHub`, glyph: '⌂', render: renderGitHub },
-  search: { title: 'Search', glyph: '⌕', render: renderSearch },
+  search: { title: 'Search this site', glyph: '⌕', render: renderSearch },
+  google: { title: 'Google', glyph: '⌕', render: renderGoogle },
 };
 
 /** What the user typed → an address this browser can act on. */
@@ -612,8 +752,13 @@ function resolve(input: string): string {
     const url = value.startsWith('//') ? 'https:' + value : value;
     // The one external address the browser serves itself.
     if (/^https?:\/\/(www\.)?github\.com\/shreyjain7\/?$/i.test(url)) return 'shrey://github';
+    const asGoogle = googleAddress(url);
+    if (asGoogle) return asGoogle;
     return url;
   }
+
+  const bareGoogle = googleAddress('https://' + value.replace(/^\/+/, ''));
+  if (bareGoogle) return bareGoogle;
 
   const bare = value.toLowerCase().replace(/^www\./, '');
   if (bare === `github.com/${GITHUB_USER}` || bare === 'github.com/' + GITHUB_USER + '/') {
@@ -621,9 +766,25 @@ function resolve(input: string): string {
   }
   if (SITES[bare]) return 'shrey://' + bare;
 
-  // A dotted, space-free token is an address; anything else is a search.
+  // A dotted, space-free token is an address; anything else is a web search,
+  // the way an address bar behaves.
   if (/^[^\s]+\.[a-z]{2,}([/?#].*)?$/i.test(value)) return 'https://' + value;
-  return 'shrey://search?q=' + encodeURIComponent(value);
+  return 'shrey://google?q=' + encodeURIComponent(value);
+}
+
+/** Any google.com address this browser answers itself, query and all. */
+function googleAddress(url: string): string | null {
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return null;
+  }
+
+  if (!/^(www\.)?google\.[a-z.]+$/i.test(parsed.hostname)) return null;
+
+  const query = parsed.searchParams.get('q') ?? '';
+  return query ? 'shrey://google?q=' + encodeURIComponent(query) : 'shrey://google';
 }
 
 function routeOf(url: string) {
@@ -656,6 +817,7 @@ interface Tab {
 
 const BOOKMARKS: Array<[string, string]> = [
   ['Start', HOME],
+  ['Google', 'shrey://google'],
   ['GitHub', 'shrey://github'],
   ['Timetable', 'shrey://timetable'],
   ['Projects', 'shrey://projects'],

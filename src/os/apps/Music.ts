@@ -20,6 +20,7 @@ import { el, svg } from '../ui';
  */
 
 const STORE_KEY = 'shrey-pc:music:library:v1';
+const SPOTIFY_KEY = 'shrey-pc:music:spotify';
 const API_SRC = 'https://www.youtube.com/iframe_api';
 
 const ICON = {
@@ -40,6 +41,38 @@ const ICON = {
   note: svg('<path d="M9 17.6V6.4l10-2v11.1"/><circle cx="6.6" cy="17.7" r="2.4"/><circle cx="16.6" cy="15.4" r="2.4"/>'),
   plus: svg('<path d="M12 5.5v13M5.5 12h13"/>'),
 };
+
+/**
+ * Turns any Spotify link or URI into its embed form.
+ *
+ * Spotify's embed is the only way to play their catalogue on a static site:
+ * no key, no backend, no login. An anonymous listener gets 30-second
+ * previews; anyone signed into Spotify in that browser gets whole tracks.
+ * The Web Playback SDK does play full tracks outright, but it needs each
+ * visitor to hold Premium and complete an OAuth round trip, which is not a
+ * thing to ask of someone reading a CV.
+ */
+export function toSpotifyEmbed(input: string): string | null {
+  const value = input.trim();
+  if (!value) return null;
+
+  const uri = value.match(/^spotify:(track|album|artist|playlist|episode|show):([A-Za-z0-9]+)$/);
+  if (uri) return `https://open.spotify.com/embed/${uri[1]}/${uri[2]}`;
+
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    return null;
+  }
+
+  if (!/(^|\.)spotify\.com$/.test(url.hostname)) return null;
+
+  const parts = url.pathname.replace(/^\/embed/, '').split('/').filter(Boolean);
+  if (parts.length < 2) return null;
+
+  return `https://open.spotify.com/embed/${parts[0]}/${parts[1]}`;
+}
 
 interface Track {
   /** The YouTube video id — the only thing actually stored per track. */
@@ -215,6 +248,8 @@ export function createMusic(): HTMLElement {
   brand.append(brandMark, el('span', undefined, 'Music'));
   sidebar.append(brand);
 
+  const libraryNav: HTMLElement[] = [];
+
   sidebar.append(el('div', 'music__section', 'Library'));
   const nav = el('nav', 'music__nav');
   for (const [label, note] of [
@@ -225,9 +260,18 @@ export function createMusic(): HTMLElement {
     item.type = 'button';
     item.dataset.view = note;
     if (label === 'Songs') item.classList.add('is-active');
+    item.addEventListener('click', () => showLibrary());
     nav.append(item);
+    libraryNav.push(item);
   }
   sidebar.append(nav);
+
+  sidebar.append(el('div', 'music__section', 'Streaming'));
+  const spotifyNav = el('button', 'music__nav-item music__nav-item--spotify', 'Spotify');
+  spotifyNav.type = 'button';
+  spotifyNav.addEventListener('click', () => showSpotify());
+  sidebar.append(spotifyNav);
+
   body.append(sidebar);
 
   /* --- Main ------------------------------------------------------------- */
@@ -541,6 +585,96 @@ export function createMusic(): HTMLElement {
     });
 
     syncRows();
+  }
+
+  /* --- Panes ------------------------------------------------------------ */
+
+  // The library pane's pieces, so switching away and back does not rebuild it.
+  const libraryPane = [hero, adder, addStatus, table];
+
+  function showLibrary() {
+    libraryNav.forEach((item) => item.classList.toggle('is-active', item.textContent === 'Songs'));
+    spotifyNav.classList.remove('is-active');
+    main.replaceChildren(...libraryPane);
+  }
+
+  /**
+   * The Spotify pane.
+   *
+   * Their embed is a sealed iframe — this app cannot drive it, read its
+   * position, or know what it is playing. So the transport below belongs to
+   * the YouTube library and is left alone here; Spotify brings its own.
+   */
+  function showSpotify() {
+    if (playing) player?.pauseVideo();
+
+    libraryNav.forEach((item) => item.classList.remove('is-active'));
+    spotifyNav.classList.add('is-active');
+
+    let stored = '';
+    try {
+      stored = localStorage.getItem(SPOTIFY_KEY) ?? '';
+    } catch {
+      // Private browsing; the field just starts empty each time.
+    }
+
+    const pane = el('div', 'music__spotify');
+    const head = el('div', 'music__spotify-head');
+    head.append(el('h2', 'music__spotify-title', 'Spotify'));
+    head.append(
+      el(
+        'p',
+        'music__spotify-note',
+        'Paste any Spotify link — track, album, artist or playlist. Signed in to ' +
+          'Spotify in this browser you get full tracks; otherwise 30-second previews.',
+      ),
+    );
+    pane.append(head);
+
+    const frame = el('iframe', 'music__spotify-frame');
+    frame.allow = 'autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture';
+    frame.loading = 'lazy';
+    frame.title = 'Spotify player';
+    pane.append(frame);
+
+    const form = el('form', 'music__spotify-form');
+    const input = el('input', 'music__add-input');
+    input.type = 'text';
+    input.spellcheck = false;
+    input.value = stored;
+    input.placeholder = 'https://open.spotify.com/…';
+    const go = el('button', 'music__spotify-go', 'Load');
+    go.type = 'submit';
+    form.append(input, go);
+
+    const status = el('p', 'music__add-status', '');
+    pane.append(form, status);
+
+    const load = (value: string) => {
+      const embed = toSpotifyEmbed(value);
+      if (!embed) {
+        status.textContent = 'That is not a Spotify link.';
+        status.classList.add('is-error');
+        return;
+      }
+      frame.src = embed;
+      status.textContent = '';
+      status.classList.remove('is-error');
+      try {
+        localStorage.setItem(SPOTIFY_KEY, value);
+      } catch {
+        // The player is already loading; not persisting is survivable.
+      }
+    };
+
+    form.addEventListener('submit', (event) => {
+      event.preventDefault();
+      load(input.value);
+    });
+    input.addEventListener('keydown', (event) => event.stopPropagation());
+
+    if (stored) load(stored);
+    main.replaceChildren(pane);
   }
 
   /* --- Adding ----------------------------------------------------------- */

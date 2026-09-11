@@ -174,6 +174,47 @@ const PLAYLISTS: Array<{ name: string; note: string; tracks: number[] }> = [
   })),
 ];
 
+/*
+ * Streaming.
+ *
+ * Karan Aujla's catalogue is his and his label's — none of it can ship in this
+ * bundle. Spotify's embed player is the licensed way to play it: it streams
+ * from Spotify, pays out normally, and gives full tracks to a listener who is
+ * signed in (a 30-second preview otherwise).
+ *
+ * The default below points at his artist page. If Spotify ever moves it, the
+ * field under the player takes any Spotify link — track, album, artist or
+ * playlist — and remembers it.
+ */
+const SPOTIFY_DEFAULT = 'https://open.spotify.com/artist/4xJ7gBDSGgJFraRZ0eQeDU';
+const SPOTIFY_KEY = 'shrey-pc:music:spotify';
+
+/** Turns any Spotify link or URI into its embed form. */
+export function toSpotifyEmbed(input: string): string | null {
+  const value = input.trim();
+  if (!value) return null;
+
+  // spotify:track:ID
+  const uri = value.match(/^spotify:(track|album|artist|playlist|episode|show):([A-Za-z0-9]+)$/);
+  if (uri) return `https://open.spotify.com/embed/${uri[1]}/${uri[2]}`;
+
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    return null;
+  }
+
+  if (!/(^|\.)spotify\.com$/.test(url.hostname)) return null;
+
+  // /embed/... is already what we want; anything else gets /embed prefixed.
+  const path = url.pathname.replace(/^\/embed/, '');
+  const parts = path.split('/').filter(Boolean);
+  if (parts.length < 2) return null;
+
+  return `https://open.spotify.com/embed/${parts[0]}/${parts[1]}`;
+}
+
 const clock = (seconds: number) => {
   const whole = Math.max(0, Math.floor(seconds));
   return Math.floor(whole / 60) + ':' + String(whole % 60).padStart(2, '0');
@@ -431,6 +472,20 @@ export function createMusic(): HTMLElement {
   });
 
   sidebar.append(nav);
+  sidebar.append(el('div', 'player__brand', 'Streaming'));
+
+  const streamItem = el('button', 'player__nav-item');
+  streamItem.type = 'button';
+  const streamArt = el('span', 'player__nav-art');
+  streamArt.style.background = 'linear-gradient(145deg, #1db954, #0b6b31)';
+  streamItem.append(streamArt);
+  const streamMeta = el('span', 'player__nav-meta');
+  streamMeta.append(el('span', 'player__nav-name', 'Karan Aujla'));
+  streamMeta.append(el('span', 'player__nav-note', 'Spotify'));
+  streamItem.append(streamMeta);
+  streamItem.addEventListener('click', () => renderSpotify());
+  nav.append(streamItem);
+
   body.append(sidebar);
 
   /* --- Main pane -------------------------------------------------------- */
@@ -519,9 +574,88 @@ export function createMusic(): HTMLElement {
 
   const rows = new Map<number, HTMLElement>();
 
+  /** The Spotify pane. Pauses the synth first — two things playing at once is
+   *  nobody's idea of a music app. */
+  function renderSpotify() {
+    if (playing) toggle();
+
+    navButtons.forEach((item) => item.classList.remove('is-active'));
+    streamItem.classList.add('is-active');
+
+    let stored = SPOTIFY_DEFAULT;
+    try {
+      stored = localStorage.getItem(SPOTIFY_KEY) || SPOTIFY_DEFAULT;
+    } catch {
+      // Private browsing: the default still plays, it just will not persist.
+    }
+
+    const pane = el('div', 'player__stream');
+
+    const head = el('div', 'player__stream-head');
+    head.append(el('h2', 'player__stream-title', 'Karan Aujla'));
+    head.append(
+      el(
+        'p',
+        'player__stream-note',
+        'Streamed from Spotify — full tracks when you are signed in, 30-second previews otherwise. ' +
+          'Nothing is hosted here.',
+      ),
+    );
+    pane.append(head);
+
+    const frame = el('iframe', 'player__stream-frame');
+    frame.allow = 'autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture';
+    frame.loading = 'lazy';
+    frame.title = 'Spotify player';
+    pane.append(frame);
+
+    const row = el('form', 'player__stream-form');
+    const input = el('input', 'player__stream-input');
+    input.type = 'text';
+    input.spellcheck = false;
+    input.value = stored;
+    input.placeholder = 'Any Spotify link — track, album, artist or playlist';
+
+    const save = el('button', 'player__stream-save', 'Load');
+    save.type = 'submit';
+    row.append(input, save);
+
+    const status = el('p', 'player__stream-status', '');
+    pane.append(row, status);
+
+    const load = (value: string) => {
+      const embed = toSpotifyEmbed(value);
+      if (!embed) {
+        status.textContent = 'That is not a Spotify link.';
+        status.classList.add('is-error');
+        return;
+      }
+      frame.src = embed;
+      status.textContent = '';
+      status.classList.remove('is-error');
+      try {
+        localStorage.setItem(SPOTIFY_KEY, value);
+      } catch {
+        // Not worth surfacing; the player is already loading.
+      }
+    };
+
+    row.addEventListener('submit', (event) => {
+      event.preventDefault();
+      load(input.value);
+    });
+
+    input.addEventListener('keydown', (event) => event.stopPropagation());
+
+    load(stored);
+    main.replaceChildren(pane);
+  }
+
   function renderShelf() {
     const playlist = PLAYLISTS[shelf];
 
+    main.replaceChildren(hero, table);
+    streamItem.classList.remove('is-active');
     navButtons.forEach((item, position) => item.classList.toggle('is-active', position === shelf));
 
     paintCover(heroArt, TRACKS[playlist.tracks[0]].hue);

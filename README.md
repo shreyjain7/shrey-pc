@@ -115,9 +115,19 @@ terminal appears on the desktop, a file renamed on the desktop is visible to
   like a streaming client: playlist sidebar, cover art, a track table and a
   now-playing bar with transport, scrubber and spectrum analyser. Every track is
   synthesised live from a chord progression and a step sequencer, and the output
-  level drives the speakers in the room. No audio files ship.
-- **Showcase** — the whole CV behind one vertical nav, for reading straight
-  through instead of opening eight windows.
+  level drives the speakers in the room. No audio files ship. A Spotify pane
+  sits alongside it for real music — Karan Aujla by default — through Spotify's
+  official embed, which is the licensed way to play a catalogue that is not
+  mine to distribute. The field under the player takes any Spotify link.
+- **Showcase** — the whole CV behind one vertical nav: About, Experience,
+  Projects, Skills, Education, Awards, Résumé and Contact, with the résumé PDF
+  a click away. This replaced the eight separate CV windows it used to take.
+- **Search** — the web, in-window. Google cannot be embedded (it sends
+  `X-Frame-Options` and a CSP `frame-ancestors` that make browsers refuse to
+  render it inside another page), so this queries Wikipedia's API — which does
+  allow cross-origin reads — alongside DuckDuckGo's Instant Answer endpoint,
+  and lays the results out here. Opening a result renders the article as a
+  reader in the same window, so nothing ever leaves the OS.
 - **Wire**, a news reader — the Hacker News front page through the public
   Algolia endpoint, laid out as a reader rather than a list of links.
 - **Minesweeper** — three difficulties, flags, chording, a timer, and a first
@@ -134,16 +144,18 @@ terminal appears on the desktop, a file renamed on the desktop is visible to
   custom properties, toggles for scanlines, flicker, key clicks and a 24-hour
   clock, storage usage, and buttons to reset the disk or your preferences.
   Everything persists.
-- **The shell around it** — draggable *and resizable* windows (eight grips),
-  minimise / maximise / close, snapping (Alt+←/→/↑), Alt+Tab, Ctrl+W, a taskbar
-  with running apps and a system tray, a clock that opens a calendar, a start
-  menu with search across both apps and files, right-click context menus on the
-  desktop and on every icon, in-CRT dialogs, toast notifications, and a shutdown
+- **The shell around it** — a macOS-shaped desktop: a translucent menu bar that
+  names whichever app has focus, a dock whose icons swell toward the cursor,
+  traffic-light window controls and centred titles. Windows are draggable *and*
+  resizable (eight grips), with minimise / maximise / close, snapping
+  (Alt+←/→/↑), Alt+Tab and Ctrl+W. Plus a clock that opens a calendar, a menu
+  with search across apps and files, right-click context menus on the desktop
+  and on every icon, in-CRT dialogs, toast notifications, and a shutdown
   sequence that halts the machine back to standby — where any key boots it again.
 
-The CV still has its own windows — About, Projects, Experience, Skills,
-Education, Achievements, Contact and a printable résumé sheet — reachable from
-the start menu.
+All of the CV lives in Showcase now. The renderers behind each section sit in
+`src/os/apps/cv.ts`, so the sections stay independent of the window that happens
+to be showing them.
 
 ## Motion
 
@@ -287,6 +299,7 @@ src/
                         ContextMenu, Notifications, ui helpers,
                         apps/ (Browser, Timetable, SystemMonitor, Music, News,
                         Explorer, Notepad, Paint, Minesweeper, Wordle, Dos,
+                        Search,
                         Calculator, Settings, Showcase, Credits, cv.ts —
                         the shared CV renderers),
                         screen.css + desktop.css + apps.css

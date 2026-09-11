@@ -37,10 +37,9 @@ interface Command {
 }
 
 const APPS = [
-  'about', 'projects', 'experience', 'skills', 'education', 'achievements',
-  'resume', 'contact', 'explorer', 'notepad', 'calculator', 'minesweeper',
+  'showcase', 'explorer', 'notepad', 'calculator', 'minesweeper', 'wordle',
   'paint', 'settings', 'terminal', 'browser', 'timetable', 'sysmon', 'music',
-  'news',
+  'news', 'dos', 'search', 'credits',
 ];
 
 function resolve(ctx: Context, arg: string | undefined, fallback?: string) {

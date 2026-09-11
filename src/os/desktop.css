@@ -256,59 +256,6 @@
 
 /* --- Taskbar tray and calendar ------------------------------------------- */
 
-.taskbar__tray {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  padding-right: 4px;
-  border-right: 1px solid var(--line-soft);
-}
-
-.taskbar__tray-button {
-  display: grid;
-  place-items: center;
-  width: 30px;
-  height: 30px;
-  padding: 0;
-  border: none;
-  border-radius: 6px;
-  background: none;
-  color: var(--dim);
-  cursor: pointer;
-}
-
-.taskbar__tray-button:hover {
-  background: rgba(255, 255, 255, 0.07);
-  color: var(--text);
-}
-
-.taskbar__tray-button svg {
-  width: 16px;
-  height: 16px;
-}
-
-.taskbar__tray-button.is-off {
-  color: #5b6675;
-}
-
-.taskbar__clock {
-  flex: 0 0 auto;
-  padding: 7px 10px;
-  border: none;
-  border-radius: 6px;
-  background: none;
-  color: var(--dim);
-  font-family: var(--mono);
-  font-size: 14px;
-  letter-spacing: 0.6px;
-  cursor: pointer;
-}
-
-.taskbar__clock:hover {
-  background: rgba(255, 255, 255, 0.07);
-  color: var(--text);
-}
-
 .calendar {
   position: absolute;
   right: 12px;

@@ -93,11 +93,10 @@ export function createShowcase(): HTMLElement {
   const sidebar = el('nav', 'showcase__nav');
 
   const brand = el('div', 'showcase__brand');
-  const mark = el('span', 'showcase__mark');
-  mark.textContent = profile.name
-    .split(' ')
-    .map((part) => part[0])
-    .join('');
+  const mark = el('img', 'showcase__mark');
+  mark.src = profile.photo;
+  mark.alt = profile.name;
+  mark.decoding = 'async';
   brand.append(mark);
   const brandMeta = el('span', 'showcase__brand-meta');
   brandMeta.append(el('span', 'showcase__brand-name', profile.name));

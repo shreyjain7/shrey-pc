@@ -188,7 +188,7 @@ function systemTree(): FsNode {
           app('Wire', 'news'),
           app('Player', 'music'),
           app('Notepad', 'notepad'),
-          app('Resume.pdf', 'resume'),
+          app('Search', 'search'),
           app('Minesweeper', 'minesweeper'),
           app('Wordle', 'wordle'),
           app('Paint', 'paint'),

@@ -923,107 +923,237 @@
 
 /* --- Taskbar ------------------------------------------------------------ */
 
-.taskbar {
+/* --- Menu bar ------------------------------------------------------------ */
+
+.menubar {
   position: absolute;
-  right: 0;
-  bottom: 0;
-  left: 0;
-  z-index: 500;
+  inset: 0 0 auto 0;
+  z-index: 40;
   display: flex;
   align-items: center;
-  gap: 10px;
-  height: 56px;
-  padding: 0 14px;
-  border-top: 1px solid var(--line);
-  background: rgba(13, 18, 26, 0.92);
-  backdrop-filter: blur(8px);
+  gap: 14px;
+  height: 30px;
+  padding: 0 12px;
+  background: rgba(22, 26, 34, 0.62);
+  backdrop-filter: saturate(180%) blur(22px);
+  -webkit-backdrop-filter: saturate(180%) blur(22px);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  font-size: 12.5px;
+  color: rgba(255, 255, 255, 0.9);
 }
 
-.taskbar__start {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  padding: 8px 16px 8px 12px;
-  border: 1px solid var(--line);
-  border-radius: 7px;
-  background: linear-gradient(to bottom, #1f2836, #171e29);
-  color: var(--text);
-  font-family: var(--mono);
-  font-size: 14px;
-  letter-spacing: 0.6px;
+.menubar__apple {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: inherit;
   cursor: pointer;
-  transition: border-color 140ms ease;
 }
 
-.taskbar__start:hover {
-  border-color: rgba(95, 208, 255, 0.5);
+.menubar__apple:hover {
+  background: rgba(255, 255, 255, 0.14);
 }
 
-.taskbar__logo {
-  width: 15px;
-  height: 15px;
-  border-radius: 3px;
-  background: linear-gradient(135deg, var(--accent), #2f8fc4);
-  box-shadow: 0 0 10px rgba(95, 208, 255, 0.55);
+.menubar__apple svg {
+  width: 14px;
+  height: 14px;
 }
 
-.taskbar__apps {
+.menubar__app {
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+.menubar__menus {
   display: flex;
-  flex: 1;
-  gap: 7px;
-  overflow: hidden;
+  gap: 14px;
+  color: rgba(255, 255, 255, 0.72);
 }
 
-.taskbar__app {
+.menubar__menu {
+  cursor: default;
+}
+
+.menubar__menu:hover {
+  color: #fff;
+}
+
+.menubar__tray {
   display: flex;
   align-items: center;
-  gap: 8px;
-  max-width: 190px;
-  padding: 8px 14px;
-  border: 1px solid transparent;
-  border-bottom: 2px solid transparent;
-  border-radius: 6px;
-  background: rgba(255, 255, 255, 0.045);
-  color: var(--dim);
-  font-family: var(--mono);
-  font-size: 13px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  gap: 6px;
+  margin-left: auto;
+}
+
+.menubar__item {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.86);
   cursor: pointer;
-  transition: color 140ms ease, background 140ms ease, border-color 140ms ease;
 }
 
-.taskbar__app:hover {
-  background: rgba(255, 255, 255, 0.09);
-  color: var(--text);
+.menubar__item:hover {
+  background: rgba(255, 255, 255, 0.14);
 }
 
-.taskbar__app.is-active {
-  border-bottom-color: var(--accent);
-  background: rgba(95, 208, 255, 0.13);
-  color: var(--text);
-}
-
-.taskbar__app.is-minimised {
-  opacity: 0.6;
-}
-
-.taskbar__icon svg {
+.menubar__item svg {
   width: 15px;
   height: 15px;
 }
 
-.taskbar__clock {
+.menubar__item.is-off {
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.menubar__clock {
+  padding: 3px 8px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+
+.menubar__clock:hover {
+  background: rgba(255, 255, 255, 0.14);
+}
+
+/* --- Dock ---------------------------------------------------------------- */
+
+.dock {
+  position: absolute;
+  left: 50%;
+  bottom: 8px;
+  z-index: 40;
+  transform: translateX(-50%);
+  max-width: calc(100% - 24px);
+  padding: 6px;
+  border-radius: 18px;
+  background: rgba(30, 34, 44, 0.55);
+  backdrop-filter: saturate(180%) blur(24px);
+  -webkit-backdrop-filter: saturate(180%) blur(24px);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 0 14px 40px rgba(0, 0, 0, 0.45);
+}
+
+.dock__apps {
+  display: flex;
+  align-items: flex-end;
+  gap: 4px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.dock__apps::-webkit-scrollbar {
+  display: none;
+}
+
+.dock__app {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
   flex: 0 0 auto;
-  padding-left: 8px;
-  color: var(--dim);
-  font-family: var(--mono);
-  font-size: 14px;
-  letter-spacing: 0.6px;
+  width: 46px;
+  padding: 0 0 7px;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  /* Set by the magnification handler; 1 whenever the pointer is elsewhere. */
+  --mag: 1;
 }
 
-/* --- Start menu --------------------------------------------------------- */
+.dock__icon {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 11px;
+  background: linear-gradient(160deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.05));
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.32);
+  transform: scale(var(--mag));
+  transform-origin: bottom center;
+  transition: transform 0.14s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.dock__icon svg {
+  width: 21px;
+  height: 21px;
+}
+
+.dock__app.is-active .dock__icon {
+  background: linear-gradient(160deg, var(--accent-soft), rgba(255, 255, 255, 0.06));
+  border-color: var(--accent-line);
+  color: var(--accent);
+}
+
+.dock__app.is-minimised .dock__icon {
+  opacity: 0.5;
+}
+
+/* The running dot, and the hover label above the icon. */
+.dock__dot {
+  position: absolute;
+  bottom: 1px;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: transparent;
+}
+
+.dock__app.is-open .dock__dot {
+  background: rgba(255, 255, 255, 0.75);
+}
+
+.dock__label {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  padding: 4px 9px;
+  border-radius: 6px;
+  background: rgba(20, 24, 32, 0.92);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  font-size: 11.5px;
+  white-space: nowrap;
+  opacity: 0;
+  transform: translateY(4px) scale(0.94);
+  transition: opacity 0.12s ease, transform 0.12s ease;
+  pointer-events: none;
+}
+
+.dock__app:hover .dock__label {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+}
+
+@media (max-width: 640px) {
+  .dock__app {
+    width: 40px;
+  }
+
+  .dock__icon {
+    width: 34px;
+    height: 34px;
+  }
+
+  .dock__label {
+    display: none;
+  }
+}
 
 .start-menu {
   position: absolute;

@@ -558,8 +558,14 @@ export class Experience {
     window.addEventListener('keydown', (event) => {
       if (event.key === 'Escape') this.exitScreen();
 
-      // The standby screen says "press any key to boot", so honour it.
-      if (this.ready && this.view === 'room' && event.key === 'Enter') this.enterScreen();
+      // The standby screen says "press any key to boot", so honour it. The
+      // return matters: entering the screen sets the view synchronously and
+      // boots on arrival, so falling through would power the OS on before the
+      // camera had left the room.
+      if (this.ready && this.view === 'room' && event.key === 'Enter') {
+        this.enterScreen();
+        return;
+      }
 
       // After a shutdown the camera is already at the monitor, so the room's
       // enter path never runs and nothing would boot the machine back up.

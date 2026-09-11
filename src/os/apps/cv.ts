@@ -77,11 +77,10 @@ export function linkRow(label: string, href: string, display: string) {
 export function renderAbout() {
   const hero = el('div', 'hero');
 
-  const avatar = el('div', 'hero__avatar');
-  avatar.textContent = profile.name
-    .split(' ')
-    .map((part) => part[0])
-    .join('');
+  const avatar = el('img', 'hero__avatar');
+  avatar.src = profile.photo;
+  avatar.alt = profile.name;
+  avatar.decoding = 'async';
 
   const meta = el('div', 'hero__meta');
   meta.append(el('h1', 'hero__name', profile.name));

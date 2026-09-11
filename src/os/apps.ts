@@ -1,15 +1,6 @@
-import {
-  renderAbout,
-  renderAchievements,
-  renderContact,
-  renderEducation,
-  renderExperience,
-  renderProjects,
-  renderResume,
-  renderSkills,
-} from './apps/cv';
 import { createCredits } from './apps/Credits';
 import { createDos } from './apps/Dos';
+import { createSearch } from './apps/Search';
 import { createShowcase } from './apps/Showcase';
 import { createWordle } from './apps/Wordle';
 import { createTerminal } from './Terminal';
@@ -37,31 +28,7 @@ const svg = (paths: string) =>
   '</svg>';
 
 export const icons = {
-  about: svg('<circle cx="12" cy="8" r="3.4"/><path d="M4.5 20a7.5 7.5 0 0 1 15 0"/>'),
-  experience: svg(
-    '<rect x="3" y="7.5" width="18" height="12.5" rx="2"/>' +
-      '<path d="M8.5 7.5V5.8A1.8 1.8 0 0 1 10.3 4h3.4a1.8 1.8 0 0 1 1.8 1.8v1.7"/>' +
-      '<path d="M3 12.5h18"/>',
-  ),
-  projects: svg(
-    '<path d="M3 7.4A1.4 1.4 0 0 1 4.4 6h4.2l1.9 2.2h9.1A1.4 1.4 0 0 1 21 9.6v8A1.4 1.4 0 0 1 19.6 19H4.4A1.4 1.4 0 0 1 3 17.6z"/>',
-  ),
-  skills: svg(
-    '<path d="m8 8-4 4 4 4"/><path d="m16 8 4 4-4 4"/><path d="m13.5 5-3 14"/>',
-  ),
-  education: svg(
-    '<path d="m12 4 9 4.5-9 4.5-9-4.5z"/><path d="M6.5 10.6V15c0 1.6 2.5 3 5.5 3s5.5-1.4 5.5-3v-4.4"/>',
-  ),
-  achievements: svg(
-    '<circle cx="12" cy="9" r="5"/><path d="m8.6 13.2-1.1 6.3 4.5-2.3 4.5 2.3-1.1-6.3"/>',
-  ),
-  resume: svg(
-    '<path d="M14 3H7a1.8 1.8 0 0 0-1.8 1.8v14.4A1.8 1.8 0 0 0 7 21h10a1.8 1.8 0 0 0 1.8-1.8V8z"/>' +
-      '<path d="M14 3v5h4.8"/><path d="M8.6 13h6.8M8.6 16.5h4.4"/>',
-  ),
-  contact: svg(
-    '<rect x="3" y="5.5" width="18" height="13" rx="2"/><path d="m3.6 7 8.4 6 8.4-6"/>',
-  ),
+  search: svg('<circle cx="11" cy="11" r="6.6"/><path d="m16 16 4.4 4.4"/>'),
   terminal: svg('<rect x="3" y="4.5" width="18" height="15" rx="2"/><path d="m7.5 10 2.6 2.2-2.6 2.2"/><path d="M13 14.6h3.6"/>'),
   explorer: svg('<path d="M3 7.4A1.4 1.4 0 0 1 4.4 6h4.2l1.9 2.2h9.1A1.4 1.4 0 0 1 21 9.6v8A1.4 1.4 0 0 1 19.6 19H4.4A1.4 1.4 0 0 1 3 17.6z"/>'),
   notepad: svg('<path d="M4 20h16"/><path d="M14.5 4.5 19 9 9 19H4.5v-4.5z"/>'),
@@ -117,76 +84,20 @@ export const apps: AppDefinition[] = [
     render: createShowcase,
   },
   {
-    id: 'about',
-    title: 'About Me',
-    icon: icons.about,
-    width: 660,
-    height: 540,
-    render: renderAbout,
-  },
-  {
-    id: 'projects',
-    title: 'Projects',
-    icon: icons.projects,
-    width: 700,
-    height: 560,
-    render: renderProjects,
-  },
-  {
-    id: 'experience',
-    title: 'Experience',
-    icon: icons.experience,
-    width: 720,
-    height: 600,
-    render: renderExperience,
-  },
-  {
-    id: 'skills',
-    title: 'Skills',
-    icon: icons.skills,
-    width: 640,
-    height: 500,
-    render: renderSkills,
-  },
-  {
-    id: 'education',
-    title: 'Education',
-    icon: icons.education,
-    width: 680,
-    height: 460,
-    render: renderEducation,
-  },
-  {
-    id: 'achievements',
-    title: 'Achievements',
-    icon: icons.achievements,
-    width: 660,
-    height: 460,
-    render: renderAchievements,
-  },
-  {
-    id: 'resume',
-    title: 'Resume.pdf',
-    icon: icons.resume,
-    width: 760,
-    height: 640,
-    render: renderResume,
-  },
-  {
-    id: 'contact',
-    title: 'Contact',
-    icon: icons.contact,
-    width: 600,
-    height: 420,
-    render: renderContact,
-  },
-  {
     id: 'browser',
     title: 'Aperture',
     icon: icons.browser,
     width: 940,
     height: 680,
     render: createBrowser,
+  },
+  {
+    id: 'search',
+    title: 'Search',
+    icon: icons.search,
+    width: 860,
+    height: 640,
+    render: createSearch,
   },
   {
     id: 'timetable',

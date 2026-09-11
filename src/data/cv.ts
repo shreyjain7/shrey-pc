@@ -28,6 +28,8 @@ export const profile = {
   role: 'Computer Science Engineer',
   tagline: 'B.Tech CSE @ Manipal Institute of Technology',
   location: 'Hyderabad, Telangana, India',
+  /** Served from /public. */
+  photo: './shrey.png',
   summary: [
     'Computer science undergraduate at Manipal Institute of Technology, building things at the intersection of full-stack development and applied machine learning.',
     'Most of my time goes into Python and C — FastAPI services, Django applications, and recommendation systems wired up to real databases. I like problems where a clean data model does most of the work.',
@@ -50,6 +52,11 @@ export const links: Link[] = [
     label: 'GitHub',
     href: 'https://github.com/shreyjain7',
     display: 'github.com/shreyjain7',
+  },
+  {
+    label: 'Website',
+    href: 'https://shreyjain.in',
+    display: 'shreyjain.in',
   },
 ];
 
@@ -89,24 +96,17 @@ export const skills: SkillGroup[] = [
 
 export const projects: Entry[] = [
   {
-    title: 'AI Learning Companion Platform',
-    subtitle: 'Python · FastAPI · LLM APIs',
+    title: 'Local RAG-Based Document Q&A System',
+    subtitle: 'Ollama · Llama 3 · nomic-embed-text',
     bullets: [
-      'An AI-powered study assistant that answers academic questions, summarizes notes, and generates personalized learning explanations using modern large language models.',
+      'Built a fully local RAG pipeline that ingests PDF documents, embeds them using nomic-embed-text, and answers natural language queries via Llama 3 — no API keys or internet required.',
     ],
   },
   {
-    title: 'Full-Stack Student Notes Platform',
-    subtitle: 'Python · Django · MySQL',
+    title: 'Attendance Management System',
+    subtitle: 'Python · Django',
     bullets: [
-      'A secure web application where students upload, organize, search, and manage study notes, with authentication and database integration throughout.',
-    ],
-  },
-  {
-    title: 'Learning Resource Recommendation Engine',
-    subtitle: 'Python',
-    bullets: [
-      'A recommendation engine that suggests relevant study material based on user interests and previous learning activity, built on machine learning fundamentals.',
+      "Implemented a robust security layer using Django's built-in authentication system, securing all views with session-based login and protecting against CSRF vulnerabilities.",
     ],
   },
 ];

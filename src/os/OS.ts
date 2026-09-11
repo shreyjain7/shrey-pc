@@ -66,6 +66,9 @@ const MENU_ICONS = {
   search: svg('<circle cx="11" cy="11" r="6.5"/><path d="m16 16 4 4"/>'),
   power: svg('<path d="M12 4v8"/><path d="M17.7 7.3a8 8 0 1 1-11.4 0"/>'),
   close: svg('<rect x="3.5" y="5" width="17" height="14" rx="2"/><path d="m9.5 10.5 5 5M14.5 10.5l-5 5"/>'),
+  apple: '<svg viewBox="0 0 24 24" fill="currentColor" stroke="none" aria-hidden="true">' +
+    '<path d="M16.3 12.6c0-2.3 1.9-3.4 2-3.5-1.1-1.6-2.8-1.8-3.4-1.8-1.4-.2-2.8.9-3.5.9s-1.8-.8-3-.8c-1.5 0-3 .9-3.8 2.3-1.6 2.8-.4 7 1.2 9.3.8 1.1 1.7 2.4 2.9 2.3 1.2 0 1.6-.7 3-.7s1.8.7 3 .7 2-1.1 2.8-2.2c.9-1.3 1.2-2.5 1.3-2.6 0 0-2.5-1-2.5-3.9z"/>' +
+    '<path d="M14.3 5.4c.6-.8 1-1.9.9-3-.9 0-2 .6-2.7 1.4-.6.7-1.1 1.8-.9 2.9 1 .1 2-.5 2.7-1.3z"/></svg>',
   view: svg(
     '<rect x="3" y="5.5" width="13" height="9.5" rx="1.6"/>' +
       '<path d="M16 9.2 21 6.6v10.8L16 14.8z"/><path d="M6.5 19h7"/>',
@@ -74,6 +77,21 @@ const MENU_ICONS = {
 };
 
 const DESKTOP_DIR = join(HOME, 'Desktop');
+
+/** Pinned to the dock whether or not they are running, in this order. */
+const DOCK_APPS = [
+  'showcase',
+  'search',
+  'browser',
+  'music',
+  'timetable',
+  'terminal',
+  'explorer',
+  'notepad',
+  'wordle',
+  'sysmon',
+  'settings',
+];
 
 /**
  * shrey-os: a desktop environment running on the CRT. Icons, windows, a file
@@ -107,6 +125,7 @@ export class OS {
   /** Which room camera the shell believes it is being viewed from. */
   private view: 'room' | 'workstation' | 'screen' = 'screen';
   private viewButton!: HTMLButtonElement;
+  private appName!: HTMLElement;
 
   constructor(
     private audio: Audio,
@@ -132,6 +151,7 @@ export class OS {
     this.calendar = taskbarBits.calendar;
 
     this.desktop.append(
+      taskbarBits.menubar,
       this.iconGrid,
       this.windowLayer,
       this.startMenu,
@@ -405,10 +425,10 @@ export class OS {
   private bindDesktop() {
     this.desktop.addEventListener('pointerdown', (event) => {
       const target = event.target as HTMLElement;
-      if (!target.closest('.start-menu') && !target.closest('.taskbar__start')) {
+      if (!target.closest('.start-menu') && !target.closest('.menubar__apple')) {
         this.startMenu.classList.remove('is-open');
       }
-      if (!target.closest('.calendar') && !target.closest('.taskbar__clock')) {
+      if (!target.closest('.calendar') && !target.closest('.menubar__clock')) {
         this.calendar.classList.remove('is-open');
       }
       if (target === this.desktop || target === this.iconGrid) {
@@ -581,23 +601,37 @@ export class OS {
   /* Taskbar                                                                 */
   /* ---------------------------------------------------------------------- */
 
+  /**
+   * The menu bar and the dock.
+   *
+   * The menu bar carries the focused app's name, because on this desktop —
+   * like the one it is imitating — the window that has focus owns the strip at
+   * the top of the screen. The dock is a fixed shelf of favourites plus
+   * whatever else happens to be running.
+   */
   private buildTaskbar() {
-    const taskbar = el('footer', 'taskbar');
+    const menubar = el('header', 'menubar');
 
-    const start = el('button', 'taskbar__start');
-    start.type = 'button';
-    start.innerHTML = '<span class="taskbar__logo"></span>';
-    start.append(document.createTextNode('Start'));
-    start.addEventListener('click', (event) => {
+    const apple = el('button', 'menubar__apple');
+    apple.type = 'button';
+    apple.title = 'Menu';
+    apple.innerHTML = MENU_ICONS.apple;
+    apple.addEventListener('click', (event) => {
       event.stopPropagation();
       this.audio.click();
       this.toggleStart();
     });
 
-    const appsHost = el('div', 'taskbar__apps');
+    this.appName = el('span', 'menubar__app', 'Finder');
 
-    const tray = el('div', 'taskbar__tray');
-    const sound = el('button', 'taskbar__tray-button');
+    const menus = el('div', 'menubar__menus');
+    for (const label of ['File', 'Edit', 'View', 'Window']) {
+      menus.append(el('span', 'menubar__menu', label));
+    }
+
+    const tray = el('div', 'menubar__tray');
+
+    const sound = el('button', 'menubar__item');
     sound.type = 'button';
     sound.title = 'Sound';
     sound.innerHTML = MENU_ICONS.sound;
@@ -608,7 +642,7 @@ export class OS {
     this.audio.setOnChange((muted) => sound.classList.toggle('is-off', muted));
 
     // The view switcher: step out to the room without leaving the desktop.
-    this.viewButton = el('button', 'taskbar__tray-button taskbar__view');
+    this.viewButton = el('button', 'menubar__item taskbar__view');
     this.viewButton.type = 'button';
     this.viewButton.title = 'Camera view';
     this.viewButton.innerHTML = MENU_ICONS.view;
@@ -619,9 +653,7 @@ export class OS {
       setRoomView(next);
     });
 
-    tray.append(this.viewButton, sound);
-
-    const clock = el('button', 'taskbar__clock');
+    const clock = el('button', 'menubar__clock');
     clock.type = 'button';
     clock.addEventListener('click', (event) => {
       event.stopPropagation();
@@ -631,11 +663,59 @@ export class OS {
       this.calendar.classList.toggle('is-open');
     });
 
-    taskbar.append(start, appsHost, tray, clock);
+    tray.append(this.viewButton, sound, clock);
+    menubar.append(apple, this.appName, menus, tray);
+
+    /* --- Dock ----------------------------------------------------------- */
+
+    const dock = el('footer', 'dock');
+    const appsHost = el('div', 'dock__apps');
+    dock.append(appsHost);
+
+    this.bindDockMagnification(dock, appsHost);
 
     const calendar = el('div', 'calendar');
 
-    return { taskbar, appsHost, clock, calendar };
+    return { taskbar: dock, menubar, appsHost, clock, calendar };
+  }
+
+  /**
+   * Dock magnification.
+   *
+   * Icons swell with their distance from the cursor. The listener only writes
+   * while the pointer is actually over the dock — inside the CSS3D projection
+   * every changed pixel re-rasters the whole screen, so a permanent ticker
+   * here would cost more than the effect is worth.
+   */
+  private bindDockMagnification(dock: HTMLElement, host: HTMLElement) {
+    const LIFT = 0.55;
+
+    const apply = (clientX: number | null) => {
+      const icons = Array.from(host.children) as HTMLElement[];
+
+      // Reach is measured in icons, not pixels. The desktop is projected onto
+      // the monitor through a 3D transform, so its on-screen scale changes
+      // with the camera — a fixed pixel radius would cover the whole dock from
+      // the room and barely one icon up close.
+      const reach = (icons[0]?.getBoundingClientRect().width || 46) * 2.4;
+
+      for (const icon of icons) {
+        if (clientX === null) {
+          icon.style.removeProperty('--mag');
+          continue;
+        }
+        const box = icon.getBoundingClientRect();
+        const centre = box.left + box.width / 2;
+        const distance = Math.abs(clientX - centre);
+        const falloff = Math.max(0, 1 - distance / reach);
+        // Cosine easing, so the bulge has shoulders rather than a spike.
+        const scale = 1 + LIFT * (0.5 - Math.cos(falloff * Math.PI) / 2);
+        icon.style.setProperty('--mag', scale.toFixed(3));
+      }
+    };
+
+    dock.addEventListener('pointermove', (event) => apply(event.clientX));
+    dock.addEventListener('pointerleave', () => apply(null));
   }
 
   private syncTaskbar() {
@@ -644,20 +724,36 @@ export class OS {
     // The system monitor's process table reads this off the screen root.
     this.root.dataset.running = this.manager.running.join(',');
 
-    for (const app of apps) {
-      if (!this.manager.isOpen(app.id)) continue;
+    if (this.appName) {
+      this.appName.textContent = focused ? appsById.get(focused)?.title ?? 'Finder' : 'Finder';
+    }
 
-      const button = el('button', 'taskbar__app');
+    // Favourites always sit in the dock; anything else joins while it runs.
+    const shown = apps.filter(
+      (app) => DOCK_APPS.includes(app.id) || this.manager.isOpen(app.id),
+    );
+
+    for (const app of shown) {
+      const open = this.manager.isOpen(app.id);
+
+      const button = el('button', 'dock__app');
       button.type = 'button';
       button.dataset.app = app.id;
+      button.title = app.title;
       button.classList.toggle('is-active', focused === app.id);
+      button.classList.toggle('is-open', open);
       button.classList.toggle('is-minimised', this.manager.isMinimised(app.id));
-      button.innerHTML = '<span class="taskbar__icon">' + app.icon + '</span>';
-      button.append(document.createTextNode(app.title));
+      button.innerHTML =
+        '<span class="dock__icon">' + app.icon + '</span>' +
+        '<span class="dock__label">' + app.title + '</span>' +
+        '<span class="dock__dot"></span>';
+
       button.addEventListener('click', () => {
         this.audio.click();
-        this.manager.toggle(app);
+        if (open) this.manager.toggle(app);
+        else this.manager.open(app);
       });
+
       this.taskbarApps.append(button);
     }
   }
@@ -796,7 +892,7 @@ export class OS {
         telemetry.setPowered(true);
 
         // Open with something to read rather than a bare desktop.
-        this.manager.open(appsById.get('about')!);
+        this.manager.open(appsById.get('showcase')!);
         notify('Welcome', 'Right-click the desktop, or open the Terminal.');
       }, elapsed + 620),
     );

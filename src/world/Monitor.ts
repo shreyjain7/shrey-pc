@@ -6,6 +6,7 @@ import {
   Group,
   Mesh,
   MeshBasicMaterial,
+  MeshPhysicalMaterial,
   MeshStandardMaterial,
   Object3D,
   PlaneGeometry,
@@ -153,16 +154,14 @@ export class Monitor {
     // --- Glass ---------------------------------------------------------------
     // Three thin planes stacked in front of the DOM, all drawn after it:
     // a tint, the tube's corner falloff, and dust caught in the light.
-    //
-    // All unlit on purpose. A physical material here picks up the studio's key and
-    // fill as a specular sheet across the whole pane, which whites out the DOM
-    // behind it — the brighter the set, the less of the screen you can read.
     const glass = new Mesh(
       new PlaneGeometry(MONITOR.screenWidth, MONITOR.screenHeight),
-      new MeshBasicMaterial({
+      new MeshPhysicalMaterial({
         color: 0x8ea8c8,
         transparent: true,
-        opacity: 0.05,
+        opacity: 0.04,
+        roughness: 0.08,
+        metalness: 0,
         depthWrite: false,
       }),
     );
@@ -176,7 +175,7 @@ export class Monitor {
       new MeshBasicMaterial({
         color: 0x000000,
         transparent: true,
-        opacity: 0.16,
+        opacity: 0.42,
         alphaMap: vignetteTexture(),
         depthWrite: false,
       }),

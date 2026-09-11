@@ -38,12 +38,38 @@ export class Room {
   private readonly frame = new MeshStandardMaterial({ color: 0x14161c, roughness: 0.55 });
   private readonly shelfWood = new MeshStandardMaterial({ color: 0x4a3423, roughness: 0.7 });
 
-  constructor(private quality: Quality) {
+  /**
+   * `studio` swaps the room for a product-shot backdrop: one pale ground plane
+   * and nothing else, so the desk reads as an object floating in light rather
+   * than furniture in a bedroom. The walls, window, posters and shelf are all
+   * skipped — with fog matched to the background they would only appear as a
+   * horizon line where there should be none.
+   */
+  constructor(
+    private quality: Quality,
+    studio = false,
+  ) {
+    if (studio) {
+      this.buildStudioFloor();
+      return;
+    }
+
     this.buildShell();
     this.buildRug();
     this.buildWindow();
     this.buildPosters();
     if (quality !== 'low') this.buildShelf();
+  }
+
+  /** A large, soft, pale ground. Its only real job is to catch the shadow. */
+  private buildStudioFloor() {
+    const floor = new Mesh(
+      new PlaneGeometry(40, 40),
+      new MeshStandardMaterial({ color: 0xe9e9ec, roughness: 0.94, metalness: 0 }),
+    );
+    floor.rotation.x = -Math.PI / 2;
+    floor.receiveShadow = true;
+    this.group.add(floor);
   }
 
   private buildShell() {

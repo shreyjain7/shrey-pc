@@ -7,9 +7,12 @@
    ========================================================================= */
 
 :root {
-  --ui-text: #dbe4f2;
-  --ui-dim: #8b9aae;
-  --ui-accent: #5fd0ff;
+  --ui-text: #f4f4f6;
+  --ui-dim: #b9b9c2;
+  --ui-accent: #7fd8ff;
+  /* The chips the screen-space UI is drawn on: solid black, so the type stays
+     legible whatever the studio backdrop is doing behind it. */
+  --ui-chip: #0b0b0d;
   --ui-mono: ui-monospace, 'Cascadia Mono', 'SF Mono', Menlo, Consolas, monospace;
   /* Overwritten from JS with the real visual-viewport height. */
   --vh: 100vh;
@@ -27,7 +30,11 @@ body {
   width: 100%;
   height: 100%;
   overflow: hidden;
-  background: #05070a;
+  /* The studio backdrop. It lives here rather than on `scene.background`
+     because the WebGL canvas has to stay transparent for the CSS3D screen
+     beneath it to show through the monitor's occluder. Keep this in step with
+     STUDIO_BG in World.ts, which the fog uses to dissolve the floor into it. */
+  background: #e6e6e9;
   /* Stop iOS rubber-banding the whole page behind the canvas. */
   overscroll-behavior: none;
   touch-action: none;
@@ -93,7 +100,7 @@ body.is-hovering-monitor #webgl {
   justify-content: center;
   gap: 18px;
   padding: 32px 24px;
-  background: #05070a;
+  background: #e6e6e9;
   transition: opacity 700ms ease 150ms, visibility 700ms 150ms;
 }
 
@@ -107,6 +114,7 @@ body.is-hovering-monitor #webgl {
 }
 
 .loader__name {
+  color: #14141a;
   font-size: 15px;
   font-weight: 500;
   letter-spacing: 8px;
@@ -162,72 +170,78 @@ body.is-ready .ui-panel--always {
 }
 
 .brand {
-  top: 40px;
-  left: 44px;
+  top: 26px;
+  left: 26px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+/* Each line is its own chip, sized to its text rather than to a column. */
+.brand__name,
+.brand__role,
+.brand__location {
+  padding: 7px 13px;
+  background: var(--ui-chip);
+  font-family: var(--ui-mono);
+  white-space: nowrap;
 }
 
 .brand__name {
-  font-size: 16px;
-  font-weight: 600;
-  letter-spacing: 3.4px;
-  text-transform: uppercase;
+  font-size: 15px;
+  font-weight: 500;
+  letter-spacing: 0.5px;
+  color: var(--ui-text);
 }
 
 .brand__role {
-  margin-top: 7px;
-  font-size: 11px;
-  letter-spacing: 2.6px;
-  text-transform: uppercase;
-  color: var(--ui-accent);
+  font-size: 13px;
+  letter-spacing: 0.4px;
+  color: var(--ui-text);
 }
 
 .brand__location {
-  margin-top: 4px;
-  font-size: 11px;
-  letter-spacing: 1.6px;
+  font-size: 12px;
+  letter-spacing: 0.3px;
   color: var(--ui-dim);
 }
 
 .hint {
-  bottom: 46px;
+  bottom: 64px;
   left: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 12px;
-  width: 340px;
+  gap: 3px;
+  width: 300px;
   /* The panel transition owns transform, so centre with a margin instead. */
-  margin-left: -170px;
-  padding: 11px 20px;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  border-radius: 999px;
-  background: rgba(10, 14, 20, 0.6);
-  backdrop-filter: blur(6px);
-  font-size: 11.5px;
-  letter-spacing: 2px;
-  text-transform: uppercase;
-  color: var(--ui-dim);
+  margin-left: -150px;
+  padding: 10px 18px;
+  background: var(--ui-chip);
+  font-family: var(--ui-mono);
+  font-size: 13px;
+  letter-spacing: 0.4px;
+  color: var(--ui-text);
 }
 
+/* A terminal caret, so the prompt reads as something waiting for input. */
 .hint__dot {
   flex: 0 0 auto;
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--ui-accent);
-  box-shadow: 0 0 10px var(--ui-accent);
-  animation: hint-pulse 2s ease-in-out infinite;
+  width: 8px;
+  height: 15px;
+  background: var(--ui-text);
+  animation: hint-caret 1.1s steps(1, end) infinite;
 }
 
-@keyframes hint-pulse {
+@keyframes hint-caret {
   0%,
-  100% {
-    opacity: 0.35;
-    transform: scale(0.85);
-  }
-  50% {
+  49% {
     opacity: 1;
-    transform: scale(1);
+  }
+  50%,
+  100% {
+    opacity: 0;
   }
 }
 
@@ -241,10 +255,12 @@ body.is-ready .ui-panel--always {
 }
 
 .social a {
-  font-size: 11.5px;
-  letter-spacing: 2.2px;
-  text-transform: uppercase;
-  color: var(--ui-dim);
+  padding: 6px 11px;
+  background: var(--ui-chip);
+  font-family: var(--ui-mono);
+  font-size: 12px;
+  letter-spacing: 0.3px;
+  color: var(--ui-text);
   text-decoration: none;
   transition: color 160ms ease;
 }

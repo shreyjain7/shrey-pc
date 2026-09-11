@@ -29,6 +29,8 @@ export class Experience {
   private readonly ui: HTMLElement;
   private loader!: HTMLElement;
   private loaderFill!: HTMLElement;
+  private brandClock!: HTMLElement;
+  private clockTick = 0;
   private soundButton!: HTMLButtonElement;
 
   private overlay!: HTMLElement;
@@ -436,16 +438,18 @@ export class Experience {
     const brandLocation = document.createElement('p');
     brandLocation.className = 'brand__location';
     brandLocation.textContent = profile.location;
-    brand.append(brandName, brandRole, brandLocation);
+
+    // A running clock, because a still frame of a desk should show some sign
+    // of being live. Ticks once a second off the shared frame loop.
+    this.brandClock = document.createElement('p');
+    this.brandClock.className = 'brand__location brand__clock';
+    brand.append(brandName, brandRole, brandLocation, this.brandClock);
 
     const hint = document.createElement('div');
     hint.className = 'ui-panel ui-panel--idle hint';
-    const dot = document.createElement('span');
-    dot.className = 'hint__dot';
-    hint.append(
-      dot,
-      document.createTextNode('Tap the monitor to sit down · tap the tower for a closer look'),
-    );
+    const caret = document.createElement('span');
+    caret.className = 'hint__dot';
+    hint.append(document.createTextNode('Click anywhere'), caret);
 
     const social = document.createElement('div');
     social.className = 'ui-panel ui-panel--idle social';
@@ -573,6 +577,15 @@ export class Experience {
   /* ---------------------------------------------------------------------- */
 
   private update(delta: number, elapsed: number) {
+    // One text write a second, not one a frame.
+    this.clockTick += delta;
+    if (this.clockTick >= 1) {
+      this.clockTick = 0;
+      if (this.brandClock) {
+        this.brandClock.textContent = new Date().toLocaleTimeString();
+      }
+    }
+
     // Telemetry first: everything downstream this frame reads from it.
     telemetry.update(delta);
 

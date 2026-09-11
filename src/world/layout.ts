@@ -50,8 +50,10 @@ export const PX_TO_M = MONITOR.screenWidth / SCREEN_PX.width;
 
 /** Where the camera rests when nothing is focused. */
 export const IDLE_CAMERA = {
-  position: new Vector3(0.34, 1.4, 1.52),
-  target: new Vector3(0, 1.06, -0.15),
+  // Back and above, so the resting shot frames the whole desk as an object in
+  // the studio rather than sitting the viewer down at it straight away.
+  position: new Vector3(1.55, 2.35, 3.15),
+  target: new Vector3(-0.05, 0.86, -0.1),
 };
 
 /**

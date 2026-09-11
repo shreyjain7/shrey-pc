@@ -6,7 +6,7 @@ export class Desk {
   readonly group = new Group();
 
   private readonly wood = new MeshStandardMaterial({
-    color: 0x6b4a30,
+    color: 0x3c3f45,
     roughness: 0.62,
     metalness: 0.04,
   });

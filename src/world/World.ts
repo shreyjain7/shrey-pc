@@ -18,6 +18,9 @@ import { Room } from './Room';
 import { CASE, Tower } from './Tower';
 import { TOWER } from './layout';
 
+/** The studio ground, sky and fog are all this one grey. */
+const STUDIO_BG = 0xe6e6e9;
+
 export interface BuildStep {
   name: string;
   run: () => void;
@@ -63,9 +66,19 @@ export class World {
         run: () => {
           // Required before any RectAreaLight can be lit.
           RectAreaLightUniformsLib.init();
-          // Just enough haze for the lamp and window to read as volumes.
-          this.scene.fog = new FogExp2(0x0a0d14, quality === 'low' ? 0.05 : 0.08);
-          this.scene.add(new Room(quality).group);
+
+          /*
+           * A studio, not a bedroom: the ground and the fog are the same pale
+           * grey, so the floor dissolves instead of ending at a visible
+           * horizon — the infinite-cyclorama trick.
+           *
+           * The backdrop itself is the *page* background, not `scene.background`.
+           * Setting the latter makes the canvas opaque, and this scene depends
+           * on it staying transparent: the monitor punches a depth-only hole
+           * for the CSS3D layer beneath, which an opaque canvas would bury.
+           */
+          this.scene.fog = new FogExp2(STUDIO_BG, quality === 'low' ? 0.028 : 0.036);
+          this.scene.add(new Room(quality, true).group);
         },
       },
       {
@@ -106,10 +119,13 @@ export class World {
       {
         name: 'lighting.rig',
         run: () => {
-          this.scene.add(new AmbientLight(0x9099b5, 0.75));
-          this.scene.add(new HemisphereLight(0x6d7ea3, 0x2a211b, 1.05));
+          // Bright and neutral. The old rig was a blue night-time room; this
+          // is a lit set, so the fill carries most of the exposure and the key
+          // exists mainly to put a soft shadow under the desk.
+          this.scene.add(new AmbientLight(0xffffff, 2.1));
+          this.scene.add(new HemisphereLight(0xffffff, 0xd7d7dc, 2.4));
 
-          const key = new DirectionalLight(0xbfd0ff, 1.15);
+          const key = new DirectionalLight(0xffffff, 1.5);
           key.position.set(-2.2, 3.4, 2.4);
           key.castShadow = quality !== 'low';
           const shadowSize = quality === 'high' ? 2048 : 1024;
@@ -123,7 +139,7 @@ export class World {
           key.shadow.bias = -0.0012;
           this.scene.add(key);
 
-          const rim = new DirectionalLight(0x8899cc, 0.5);
+          const rim = new DirectionalLight(0xffffff, 0.8);
           rim.position.set(2.6, 1.6, -2.2);
           this.scene.add(rim);
         },
@@ -176,12 +192,14 @@ export class World {
     const travelled = Math.hypot(event.clientX - down.x, event.clientY - down.y);
     if (travelled > 10) return;
 
-    if (this.hitsMonitor(event)) {
-      this.onMonitorClick();
+    // Clicking the case is how you get a closer look at it. Everything else —
+    // the monitor, the desk, the empty studio around it — sits you down, which
+    // is what the prompt on screen promises.
+    if (this.hitsTower(event)) {
+      this.onTowerClick();
       return;
     }
-    // Clicking the case is how you get a closer look at it.
-    if (this.hitsTower(event)) this.onTowerClick();
+    this.onMonitorClick();
   };
 
   private onPointerMove = (event: PointerEvent) => {

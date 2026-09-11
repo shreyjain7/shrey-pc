@@ -317,6 +317,17 @@ export class OS {
 
   private buildStandby() {
     const layer = el('div', 'layer layer--standby is-visible');
+
+    // The face before the name, the way a login screen does it. Faded in on
+    // load so a slow decode shows nothing rather than an empty disc.
+    const photo = el('img', 'standby__photo');
+    photo.src = profile.photo;
+    photo.alt = profile.name;
+    photo.decoding = 'async';
+    photo.addEventListener('load', () => photo.classList.add('is-ready'));
+    if (photo.complete) photo.classList.add('is-ready');
+    layer.append(photo);
+
     layer.append(el('h1', 'standby__name', profile.name));
     layer.append(el('p', 'standby__role', profile.role));
 
@@ -474,8 +485,17 @@ export class OS {
     const menu = el('nav', 'start-menu');
 
     const head = el('div', 'start-menu__head');
-    head.append(el('span', 'start-menu__name', profile.name));
-    head.append(el('span', 'start-menu__role', profile.role));
+
+    const face = el('img', 'start-menu__photo');
+    face.src = profile.photo;
+    face.alt = '';
+    face.decoding = 'async';
+
+    const who = el('div', 'start-menu__who');
+    who.append(el('span', 'start-menu__name', profile.name));
+    who.append(el('span', 'start-menu__role', profile.role));
+
+    head.append(face, who);
     menu.append(head);
 
     const searchRow = el('div', 'start-menu__search');

@@ -57,6 +57,11 @@ export class Monitor {
     const plasticCentreY = bezelCentreY - (CHIN - MONITOR.bezel) / 2;
 
     // --- Front bezel: a rounded slab with the screen cut out of it -----------
+    // The chin pulls the plastic's centre below the glass', so the window has
+    // to be lifted back by the same amount. Without this the bezel sits low
+    // over the screen and crops the top of whatever the OS is drawing there.
+    const holeLift = bezelCentreY - plasticCentreY;
+
     const bezel = new Mesh(
       roundedSlab(OUTER_W, OUTER_H, 0.022, {
         depth: BEZEL_DEPTH,
@@ -64,6 +69,7 @@ export class Monitor {
         holeWidth: OPENING_W,
         holeHeight: OPENING_H,
         holeRadius: 0.014,
+        holeOffsetY: holeLift,
       }),
       this.plastic,
     );

@@ -11,6 +11,7 @@ import { MenuBar } from './MenuBar';
 import type { BarItem, BarMenu } from './MenuBar';
 import { mountNotifications, notify } from './Notifications';
 import { settings } from './settings';
+import { Spotlight } from './Spotlight';
 import {
   openPath,
   registerSystem,
@@ -61,6 +62,12 @@ const MENU_ICONS = {
       '<path d="M16 9.2 21 6.6v10.8L16 14.8z"/><path d="M6.5 19h7"/>',
   ),
   sound: svg('<path d="M11 5 6.5 8.8H3.4v6.4h3.1L11 19z"/><path d="M15.4 9.2a4 4 0 0 1 0 5.6"/>'),
+  overview: svg(
+    '<rect x="3.2" y="4.5" width="8" height="6.4" rx="1.3"/>' +
+      '<rect x="12.8" y="4.5" width="8" height="6.4" rx="1.3"/>' +
+      '<rect x="3.2" y="13.1" width="8" height="6.4" rx="1.3"/>' +
+      '<rect x="12.8" y="13.1" width="8" height="6.4" rx="1.3"/>',
+  ),
   expand: svg('<path d="M9 4.5H4.5V9"/><path d="M15 4.5h4.5V9"/><path d="M9 19.5H4.5V15"/><path d="M15 19.5h4.5V15"/>'),
 };
 
@@ -106,6 +113,7 @@ export class OS {
   private readonly startList: HTMLElement;
   private readonly search: HTMLInputElement;
   private readonly manager: WindowManager;
+  private readonly spotlight: Spotlight;
 
   private selected: string | null = null;
   private timers: number[] = [];
@@ -136,6 +144,11 @@ export class OS {
     // these two elements — nothing is mounted until a window opens.
     this.manager = new WindowManager(this.windowLayer, this.root, () => this.audio.click());
 
+    this.spotlight = new Spotlight(
+      (app) => this.manager.open(app),
+      (path) => this.launch(path),
+    );
+
     const startBits = this.buildStartMenu();
     this.startMenu = startBits.menu;
     this.startList = startBits.list;
@@ -153,6 +166,7 @@ export class OS {
       this.startMenu,
       this.calendar,
       taskbarBits.taskbar,
+      this.spotlight.element,
     );
 
     const crt = el('div', 'crt');
@@ -429,6 +443,8 @@ export class OS {
   }
 
   private bindDesktop() {
+    this.bindOverview();
+
     this.desktop.addEventListener('pointerdown', (event) => {
       const target = event.target as HTMLElement;
       if (!target.closest('.start-menu') && !target.closest('.menubar__apple')) {
@@ -663,6 +679,26 @@ export class OS {
     });
     this.audio.setOnChange((muted) => sound.classList.toggle('is-off', muted));
 
+    const spot = el('button', 'menubar__item');
+    spot.type = 'button';
+    spot.title = 'Spotlight (⌘K)';
+    spot.innerHTML = MENU_ICONS.search;
+    spot.addEventListener('click', (event) => {
+      event.stopPropagation();
+      this.audio.click();
+      this.closeMenus();
+      this.spotlight.open();
+    });
+
+    const overview = el('button', 'menubar__item');
+    overview.type = 'button';
+    overview.title = 'Mission Control (F3)';
+    overview.innerHTML = MENU_ICONS.overview;
+    overview.addEventListener('click', (event) => {
+      event.stopPropagation();
+      this.toggleMissionControl();
+    });
+
     // The view switcher: step out to the room without leaving the desktop.
     this.viewButton = el('button', 'menubar__item taskbar__view');
     this.viewButton.type = 'button';
@@ -703,7 +739,7 @@ export class OS {
       toggleFullscreen();
     });
 
-    tray.append(this.viewButton, recentre, expand, sound, clock);
+    tray.append(spot, overview, this.viewButton, recentre, expand, sound, clock);
     menubar.append(apple, this.menuBar.element, tray);
 
     /* --- Dock ----------------------------------------------------------- */
@@ -779,12 +815,14 @@ export class OS {
     return null;
   }
 
+  private openApp(id: string) {
+    const app = appsById.get(id);
+    if (app) this.manager.open(app);
+  }
+
   private barMenus(): BarMenu[] {
     const frontmost = () => this.manager.focusedApp();
-    const openById = (id: string) => {
-      const app = appsById.get(id);
-      if (app) this.manager.open(app);
-    };
+    const openById = (id: string) => this.openApp(id);
 
     /** execCommand is the only route to a field's own undo stack. */
     const edit = (command: string) => () => {
@@ -920,6 +958,12 @@ export class OS {
               disabled: !id,
               action: () => id && this.manager.toggleMaximise(id),
             },
+            {
+              label: 'Mission Control',
+              shortcut: 'F3',
+              disabled: !this.manager.running.length,
+              action: () => this.toggleMissionControl(),
+            },
             { separator: true },
             {
               label: 'Move Left',
@@ -954,6 +998,35 @@ export class OS {
         },
       },
     ];
+  }
+
+  /**
+   * Mission Control: every window tiled out at once.
+   *
+   * Clicking a tile picks that window and drops back; clicking past them just
+   * drops back. Both go through the capture handler below, so the click never
+   * reaches the app inside the tile.
+   */
+  private toggleMissionControl(on?: boolean) {
+    this.closeMenus();
+    this.audio.click();
+    return this.manager.toggleMissionControl(on ?? !this.manager.inOverview);
+  }
+
+  private bindOverview() {
+    this.desktop.addEventListener(
+      'pointerdown',
+      (event) => {
+        if (!this.manager.inOverview) return;
+        event.preventDefault();
+        event.stopPropagation();
+
+        const tile = (event.target as HTMLElement).closest('.win') as HTMLElement | null;
+        this.manager.toggleMissionControl(false);
+        if (tile?.dataset.app) this.manager.focus(tile.dataset.app);
+      },
+      true,
+    );
   }
 
   /** Everything except the frontmost window, out of the way. */
@@ -1110,6 +1183,7 @@ export class OS {
   private closeMenus() {
     closeContextMenu();
     this.menuBar?.close();
+    this.spotlight?.close();
     this.startMenu.classList.remove('is-open');
     this.calendar.classList.remove('is-open');
   }
@@ -1118,39 +1192,120 @@ export class OS {
   /* Shortcuts                                                               */
   /* ---------------------------------------------------------------------- */
 
+  /**
+   * The shell's own keyboard shortcuts.
+   *
+   * Bound to the window in the capture phase, for two reasons. A handler on
+   * the screen element only fires while something inside it holds focus,
+   * which is not true when you are simply looking at the desktop. And several
+   * apps stop propagation on every keydown to keep typing to themselves —
+   * Wordle takes letters, the terminal takes everything — so a bubbling
+   * handler goes silent the moment one of them is in front. Capture runs
+   * before either of them.
+   *
+   * Some of these the browser keeps: ⌘W and ⌘Q never reach a page, and macOS
+   * takes ⌘Space for its own Spotlight. Where that happens the browser wins
+   * and this never runs, so binding them costs nothing and they work wherever
+   * they are free. ⌘K is the one that is always available, and every shortcut
+   * here also has a menu item behind it.
+   */
   private bindShortcuts() {
-    this.root.addEventListener('keydown', (event) => {
-      if (this.state === 'standby') {
-        this.powerOn();
-        return;
-      }
+    window.addEventListener(
+      'keydown',
+      (event) => {
+        if (this.state !== 'desktop') return;
 
-      if (this.state !== 'desktop') return;
-      const focused = this.manager.focusedId;
+        const cmd = event.metaKey || event.ctrlKey;
+        const id = this.manager.focusedId;
+        const key = event.key.toLowerCase();
 
-      if (event.key === 'Tab' && event.altKey) {
-        event.preventDefault();
-        this.manager.cycle();
-        return;
-      }
+        if (event.key === 'Escape') {
+          this.closeMenus();
+          return;
+        }
 
-      if (event.key.toLowerCase() === 'w' && (event.ctrlKey || event.metaKey)) {
-        event.preventDefault();
-        if (focused) this.manager.close(focused);
-        return;
-      }
+        // Mission Control, on both the Mac chord and the function key.
+        if (event.key === 'F3' || (event.ctrlKey && event.key === 'ArrowUp')) {
+          event.preventDefault();
+          this.toggleMissionControl();
+          return;
+        }
 
-      if (event.key === 'Escape') {
-        this.closeMenus();
-        return;
-      }
+        // Spotlight. Space is read off `code` so it fires on any layout.
+        if (cmd && (event.code === 'Space' || key === 'k')) {
+          event.preventDefault();
+          this.closeMenus();
+          this.spotlight.open();
+          return;
+        }
 
-      if (focused && event.altKey) {
-        if (event.key === 'ArrowLeft') return this.manager.snap(focused, 'left');
-        if (event.key === 'ArrowRight') return this.manager.snap(focused, 'right');
-        if (event.key === 'ArrowUp') return this.manager.snap(focused, 'top');
-      }
-    });
+        // Alt+Tab predates the macOS dressing; ⌘` is the Mac spelling of it.
+        if ((event.key === 'Tab' && event.altKey) || (cmd && event.key === '`')) {
+          event.preventDefault();
+          this.manager.cycle();
+          return;
+        }
+
+        if (cmd && event.altKey) {
+          if (key === 'w') {
+            event.preventDefault();
+            this.manager.closeAll();
+            return;
+          }
+          if (key === 'h') {
+            event.preventDefault();
+            this.hideOthers();
+            return;
+          }
+        }
+
+        if (event.ctrlKey && event.metaKey && key === 'f') {
+          event.preventDefault();
+          toggleFullscreen();
+          return;
+        }
+
+        if (cmd && !event.altKey) {
+          if (key === ',') {
+            event.preventDefault();
+            this.openApp('settings');
+            return;
+          }
+          if (key === 'n') {
+            event.preventDefault();
+            this.openApp('explorer');
+            return;
+          }
+          if (key === '0') {
+            event.preventDefault();
+            resetCameraView();
+            return;
+          }
+
+          // The rest need something in front to act on.
+          if (!id) return;
+          if (key === 'w' || key === 'q') {
+            event.preventDefault();
+            this.manager.close(id);
+            return;
+          }
+          if (key === 'm' || key === 'h') {
+            event.preventDefault();
+            this.manager.minimise(id);
+            return;
+          }
+        }
+
+        // Snapping is unmodified enough to collide with a caret: ⌥← moves by
+        // word in a text field, and that has to win.
+        if (id && event.altKey && !cmd && !this.editTarget()) {
+          if (event.key === 'ArrowLeft') return this.manager.snap(id, 'left');
+          if (event.key === 'ArrowRight') return this.manager.snap(id, 'right');
+          if (event.key === 'ArrowUp') return this.manager.snap(id, 'top');
+        }
+      },
+      true,
+    );
   }
 
   /* ---------------------------------------------------------------------- */

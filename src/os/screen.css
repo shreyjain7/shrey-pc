@@ -1590,3 +1590,204 @@
 .screen.is-compact .term {
   font-size: 13px;
 }
+
+
+/* --- Spotlight ----------------------------------------------------------- */
+
+/*
+ * Sits above the windows but below the menu bar, the way the real one does.
+ * Hidden with display so nothing inside it can be tabbed to while it is shut.
+ */
+.spotlight {
+  position: absolute;
+  inset: 0;
+  z-index: 860;
+  display: none;
+  justify-content: center;
+  align-items: flex-start;
+  padding-top: 190px;
+  background: rgba(4, 7, 12, 0.28);
+}
+
+.spotlight.is-open {
+  display: flex;
+  animation: spotlight-in 130ms ease-out;
+}
+
+@keyframes spotlight-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.spotlight__panel {
+  width: 620px;
+  max-width: calc(100% - 48px);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 14px;
+  background: rgba(24, 29, 39, 0.97);
+  backdrop-filter: saturate(180%) blur(28px);
+  -webkit-backdrop-filter: saturate(180%) blur(28px);
+  box-shadow: 0 30px 70px rgba(0, 0, 0, 0.62);
+  overflow: hidden;
+  animation: spotlight-panel-in 150ms cubic-bezier(0.2, 0.9, 0.3, 1);
+}
+
+@keyframes spotlight-panel-in {
+  from {
+    transform: translateY(-8px) scale(0.985);
+  }
+  to {
+    transform: none;
+  }
+}
+
+.spotlight__bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 18px;
+  height: 58px;
+}
+
+.spotlight__glyph {
+  flex: 0 0 auto;
+  font-size: 22px;
+  color: rgba(255, 255, 255, 0.42);
+}
+
+.spotlight__field {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: none;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 22px;
+  outline: none;
+}
+
+.spotlight__field::placeholder {
+  color: rgba(255, 255, 255, 0.3);
+}
+
+/* The list only exists once something matches, so an empty field is one bar. */
+.spotlight__list {
+  display: none;
+  padding: 6px;
+  border-top: 1px solid rgba(255, 255, 255, 0.09);
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.spotlight.has-results .spotlight__list {
+  display: block;
+}
+
+.spotlight__row {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  width: 100%;
+  padding: 7px 12px;
+  border: 0;
+  border-radius: 7px;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  font-size: 13.5px;
+  text-align: left;
+  cursor: default;
+}
+
+.spotlight__row[hidden] {
+  display: none;
+}
+
+.spotlight__row.is-active {
+  background: var(--accent);
+  color: #08121c;
+}
+
+.spotlight__icon {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 20px;
+  height: 20px;
+}
+
+.spotlight__icon svg {
+  width: 17px;
+  height: 17px;
+}
+
+.spotlight__label {
+  flex: 0 1 auto;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* The path, pushed out to the right of the name. */
+.spotlight__detail {
+  flex: 1 1 auto;
+  min-width: 0;
+  text-align: right;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--faint);
+  font-size: 12px;
+}
+
+.spotlight__row.is-active .spotlight__detail {
+  color: rgba(8, 18, 28, 0.6);
+}
+
+@media (max-width: 620px) {
+  .spotlight {
+    padding-top: 96px;
+  }
+
+  .spotlight__panel {
+    max-width: calc(100% - 24px);
+  }
+}
+
+
+/* --- Mission Control ----------------------------------------------------- */
+
+/*
+ * The tiles are the real windows, only transformed — so their contents stay
+ * live and would happily take a click. Sealing the whole layer to pointer
+ * events at the tile level is what makes a click mean "pick this one".
+ */
+.windows.is-overview .win__body,
+.windows.is-overview .win__controls,
+.windows.is-overview .win__grips {
+  pointer-events: none;
+}
+
+.windows.is-overview .win {
+  cursor: pointer;
+  box-shadow: 0 26px 60px rgba(0, 0, 0, 0.55);
+}
+
+/* Every tile reads as equal here, so the frontmost one loses its emphasis. */
+.windows.is-overview .win__bar {
+  opacity: 1;
+}
+
+.windows.is-overview .win.is-tile {
+  outline: 1px solid rgba(255, 255, 255, 0.1);
+  outline-offset: 3px;
+  border-radius: 10px;
+}
+
+.windows.is-overview .win.is-tile:hover {
+  outline-color: var(--accent);
+}

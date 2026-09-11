@@ -70,6 +70,8 @@ export class WindowManager {
   private windows = new Map<string, ManagedWindow>();
   private order: string[] = [];
   private cascade = 0;
+  /** True while every window is tiled out as an overview. */
+  private overview = false;
 
   private onChange: () => void = () => {};
   /** Where a window should fly to when it minimises, in screen coordinates. */
@@ -278,6 +280,7 @@ export class WindowManager {
 
     const root = document.createElement('section');
     root.className = 'win';
+    root.dataset.app = app.id;
     root.style.width = width + 'px';
     root.style.height = height + 'px';
     root.style.left = x + 'px';
@@ -571,6 +574,82 @@ export class WindowManager {
     entry.motion.y.to(0);
 
     this.focus(id);
+  }
+
+  /* ---------------------------------------------------------------------- */
+  /* Mission Control                                                          */
+  /* ---------------------------------------------------------------------- */
+
+  /**
+   * Every open window, pulled back into a grid.
+   *
+   * Nothing about the windows' layout changes — only the transform channel
+   * they already animate on, so leaving the overview is just springing those
+   * back to rest and the windows are exactly where they were. Minimised
+   * windows stay out of it; they are not on screen to begin with.
+   */
+  toggleMissionControl(on = !this.overview): boolean {
+    if (on === this.overview) return this.overview;
+    this.overview = on;
+    this.layer.classList.toggle('is-overview', on);
+
+    const shown = this.order.filter((id) => !this.windows.get(id)?.minimised);
+
+    if (!on || shown.length === 0) {
+      this.overview = false;
+      this.layer.classList.remove('is-overview');
+      for (const entry of this.windows.values()) {
+        entry.motion.x.to(0);
+        entry.motion.y.to(0);
+        entry.motion.scale.to(1);
+        entry.root.classList.remove('is-tile');
+      }
+      return false;
+    }
+
+    const box = this.box;
+    const columns = Math.ceil(Math.sqrt(shown.length));
+    const rows = Math.ceil(shown.length / columns);
+
+    // The grid lives between the menu bar and the dock, inset a little so the
+    // tiles do not touch either.
+    const top = TOP_MARGIN + 18;
+    const height = box.height - top - TASKBAR_HEIGHT - 18;
+    const cellWidth = box.width / columns;
+    const cellHeight = height / rows;
+    const pad = 26;
+
+    shown.forEach((id, index) => {
+      const entry = this.windows.get(id);
+      if (!entry) return;
+
+      const column = index % columns;
+      const row = Math.floor(index / columns);
+
+      const width = entry.root.offsetWidth || entry.app.width;
+      const tall = entry.root.offsetHeight || entry.app.height;
+      const scale = Math.min(
+        (cellWidth - pad) / width,
+        (cellHeight - pad) / tall,
+        1,
+      );
+
+      // Transforms are about each window's own centre, so the offset is the
+      // gap between where its centre is and where its cell's centre is.
+      const targetX = cellWidth * (column + 0.5);
+      const targetY = top + cellHeight * (row + 0.5);
+
+      entry.motion.x.to(targetX - (entry.root.offsetLeft + width / 2));
+      entry.motion.y.to(targetY - (entry.root.offsetTop + tall / 2));
+      entry.motion.scale.to(scale);
+      entry.root.classList.add('is-tile');
+    });
+
+    return true;
+  }
+
+  get inOverview() {
+    return this.overview;
   }
 
   /** Alt+Tab: bring the least recently focused visible window forward. */

@@ -24,6 +24,7 @@ interface SceneHandlers {
 
 let handlers: Handlers | null = null;
 let scene: SceneHandlers | null = null;
+let quality: 'low' | 'medium' | 'high' = 'high';
 
 /** Wired once by the OS so apps can talk to the shell without importing it. */
 export function registerSystem(next: Handlers) {
@@ -63,6 +64,18 @@ export function setRoomView(view: RoomView) {
 
 export function hasCaseCam() {
   return Boolean(scene);
+}
+
+/**
+ * The device tier the room budgets against, published so an app that opens a
+ * renderer of its own can spend the same amount as the scene does.
+ */
+export function setSceneQuality(next: 'low' | 'medium' | 'high') {
+  quality = next;
+}
+
+export function sceneQuality() {
+  return quality;
 }
 
 type PathOpener = (path: string) => void;

@@ -12,6 +12,7 @@ import {
 import { createTerminal } from './Terminal';
 import { createBrowser } from './apps/Browser';
 import { createExplorer } from './apps/Explorer';
+import { createGarage } from './apps/Garage';
 import { createMusic } from './apps/Music';
 import { createNews } from './apps/News';
 import { createSystemMonitor } from './apps/SystemMonitor';
@@ -81,6 +82,11 @@ export const icons = {
   news: svg(
     '<path d="M4 5.5h12.5v13H6A2 2 0 0 1 4 16.5z"/><path d="M16.5 9H20v7.5a2 2 0 0 1-4 0z"/>' +
       '<path d="M6.8 8.6h6.6M6.8 12h6.6M6.8 15.2h4"/>',
+  ),
+  garage: svg(
+    '<path d="M3 16.5v-3.1l1.9-4.1A2 2 0 0 1 6.7 8h10.6a2 2 0 0 1 1.8 1.3l1.9 4.1v3.1"/>' +
+      '<path d="M3 13.4h18"/><circle cx="7.2" cy="16.6" r="1.7"/><circle cx="16.8" cy="16.6" r="1.7"/>' +
+      '<path d="M5.3 18.3v1.2M18.7 18.3v1.2"/>',
   ),
   settings: svg('<circle cx="12" cy="12" r="3"/><path d="M19.4 14.5a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-2.7 1.1v.3a2 2 0 1 1-4 0v-.2a1.6 1.6 0 0 0-2.8-1.1l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0-1.1-2.7H3a2 2 0 1 1 0-4h.2a1.6 1.6 0 0 0 1.1-2.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.6 1.6 0 0 0 2.7-1.1V3a2 2 0 1 1 4 0v.2a1.6 1.6 0 0 0 2.8 1.1l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0 1.1 2.7h.3a2 2 0 1 1 0 4h-.2a1.6 1.6 0 0 0-1.5 1z"/>'),
 };
@@ -375,6 +381,14 @@ export const apps: AppDefinition[] = [
     width: 900,
     height: 600,
     render: createSystemMonitor,
+  },
+  {
+    id: 'garage',
+    title: 'Garage',
+    icon: icons.garage,
+    width: 980,
+    height: 660,
+    render: createGarage,
   },
   {
     id: 'music',

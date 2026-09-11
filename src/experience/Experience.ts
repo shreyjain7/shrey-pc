@@ -2,7 +2,7 @@ import { MathUtils, PerspectiveCamera, Scene, Vector3, WebGLRenderer } from 'thr
 import { initAnalytics, track } from '../analytics';
 import { links, profile } from '../data/cv';
 import { OS } from '../os/OS';
-import { registerScene, type RoomView } from '../os/system';
+import { registerScene, setSceneQuality, type RoomView } from '../os/system';
 import { CASE } from '../world/Tower';
 import { TOWER } from '../world/layout';
 import { telemetry } from '../world/telemetry';
@@ -82,6 +82,7 @@ export class Experience {
     // The tower stands on the desk, so its centre is half a case up from it.
     this.camTarget.set(TOWER.position.x, TOWER.position.y + CASE.height / 2, TOWER.position.z);
 
+    setSceneQuality(this.sizes.quality);
     registerScene({
       caseCam: (canvas) => this.mountCaseCam(canvas),
       setView: (view) => this.setView(view),

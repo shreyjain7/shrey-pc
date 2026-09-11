@@ -182,6 +182,7 @@ function systemTree(): FsNode {
           app('Aperture', 'browser'),
           app('Timetable', 'timetable'),
           app('System Monitor', 'sysmon'),
+          app('Garage', 'garage'),
           app('Terminal', 'terminal'),
           app('Files', 'explorer'),
           app('Wire', 'news'),

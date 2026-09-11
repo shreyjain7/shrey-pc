@@ -21,6 +21,9 @@ Live: _(add your deployment URL here)_
   books and a plant, framed prints, a shuttered window onto a night skyline, a
   rug, and dust drifting through the lamp light.
 - **A machine you can watch work.** See [The hardware](#the-hardware) below.
+- **A car in the garage.** A 2019 Audi Q5 40 TDI quattro on the plate
+  CH 01 BX 8725, lofted from cross-sections and spun on a turntable in one of
+  the OS windows. See [The car](#the-car).
 - **A real OS on the glass** — not a set of static panels. See [shrey-os](#shrey-os).
 - **Three camera views**: the room, the *workstation* (the machine and the
   desktop side by side), and square on the glass. Cycle them with the taskbar
@@ -71,6 +74,53 @@ Two places to watch it from:
   renderer over the *same scene*. It is not a video: it is the same fans at the
   same angle, spun by the same numbers as the graphs beside them.
 
+## The car
+
+The Garage app holds a **2019 Audi Q5 40 TDI quattro** on the plate
+**CH 01 BX 8725**, built the same way as the rest of the room: procedurally, at
+1:1 scale in metres, out of nothing but three.js primitives and 2D canvases.
+There is no `.glb` in this repository — the car is a few kilobytes of code in
+[`src/world/AudiQ5.ts`](src/world/AudiQ5.ts), and the published dimensions of
+the FY-generation Q5 are the numbers it is built from: 4663 × 1893 × 1659 mm on
+a 2819 mm wheelbase, sitting on 235/55 R19s.
+
+**The body is a loft.** A cross-section is defined as a function of Z — sill
+height, shoulder crease, roofline, half width at three heights, corner radii —
+and 132 of those sections are skinned into a single shell. That is what makes
+the shape read as a car rather than a stack of boxes: the tumblehome, the
+rising shoulder line, the blistered arches and the taper into the D-pillar all
+fall out of the section function rather than being modelled by hand.
+
+Two things follow from that, and they are the reason the approach is worth the
+trouble:
+
+- **The wheel arches are not cut out of anything.** The section's *bottom* rises
+  into a squared-off dome over each axle, so the openings are part of the
+  surface, and the fender blisters over them because the widest point of the
+  section grows with the same curve.
+- **The glass is not modelled separately.** Windscreen, side windows, backlight
+  and the panoramic roof are *bands of the same rings*, pushed 2mm proud — so a
+  pane follows the tumblehome exactly. The shell behind each one is switched to
+  black by the loft's per-quad material callback, which is also what draws the
+  door shut lines and the underbody. One mesh, two materials, no seams to keep
+  in step.
+
+The keyframes between those sections are interpolated with a **monotone cubic**,
+not a smoothstep. A smoothstep forces the slope to zero at every keyframe, which
+terraces a long ramp like the windscreen into visible steps; the monotone cubic
+keeps C1 continuity through the knots without overshooting into bulges the car
+does not have.
+
+Everything hung on that shell is ordinary geometry: the Singleframe grille with
+its slats and the four rings, LED headlamps with the wing-shaped daytime
+signature, the tail clusters, badges, mirrors, roof rails, a cabin you can see
+through the glass, and five-twin-spoke alloys merged into one geometry per
+wheel. The number plate is a canvas drawn to the real 500 × 120 mm proportions,
+IND band and hot-stamped code included.
+
+`Export .glb` runs the same object graph through three's glTF exporter, so the
+model leaves the browser as a ~2 MB binary that opens in Blender.
+
 ## shrey-os
 
 The screen runs a small desktop environment on top of a **virtual filesystem**
@@ -116,6 +166,11 @@ terminal appears on the desktop, a file renamed on the desktop is visible to
   the room. No audio files.
 - **Wire**, a news reader — the Hacker News front page through the public
   Algolia endpoint, laid out as a reader rather than a list of links.
+- **Garage** — a turntable for a **2019 Audi Q5 40 TDI quattro**, registered
+  CH 01 BX 8725. Its own three.js scene inside a window: drag to orbit, four
+  fixed shots, seven factory paints applied live, headlights that switch on,
+  the full spec sheet, and a button that exports the whole thing as a `.glb`.
+  See [The car](#the-car).
 - **Minesweeper** — three difficulties, flags, chording, a timer, and a first
   click that is always safe.
 - **Calculator** — four functions, percent and sign, mouse or keyboard.
@@ -182,8 +237,10 @@ Alongside that:
 Two renderers share one camera:
 
 - **WebGL** draws the room. Every object is built procedurally from
-  `BoxGeometry` / `ExtrudeGeometry` / `TubeGeometry`, and every texture is drawn
-  to a canvas at load time — no model or image files are ever fetched.
+  `BoxGeometry` / `ExtrudeGeometry` / `TubeGeometry` — or, for anything whose
+  cross-section changes along its length, from the loft in
+  `src/world/geometry.ts` — and every texture is drawn to a canvas at load time,
+  so no model or image file is ever fetched.
 - **CSS3D** draws the screen: the OS is real DOM, projected onto the glass by
   `CSS3DRenderer`.
 
@@ -265,7 +322,8 @@ src/
   experience/           Sizes (device tiers), Time, Camera (three poses),
                         Audio (synthesised), Renderer, Experience (frame loop
                         and the case-cam renderer)
-  world/                layout constants, geometry and texture helpers, Room,
+  world/                layout constants, geometry and texture helpers (incl.
+                        the loft), AudiQ5 (the car), Room,
                         Desk, Monitor (CRT + CSS3D screen), Tower (the machine),
                         Peripherals (reactive desk), Dust, telemetry.ts (the
                         wire between the OS and the hardware), World
@@ -275,6 +333,7 @@ src/
                         ContextMenu, Notifications, ui helpers,
                         apps/ (Browser, Timetable, SystemMonitor, Music, News,
                         Explorer, Notepad, Paint, Minesweeper, Calculator,
+                        Garage,
                         Settings), screen.css + desktop.css + apps.css
   style.css             page chrome: loader, overlay UI, workstation dock
 ```

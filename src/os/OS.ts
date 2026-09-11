@@ -71,6 +71,7 @@ const DOCK_APPS = [
   'search',
   'browser',
   'music',
+  'spotify',
   'timetable',
   'terminal',
   'explorer',

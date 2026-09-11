@@ -2,6 +2,7 @@ import { createCredits } from './apps/Credits';
 import { createDos } from './apps/Dos';
 import { createSearch } from './apps/Search';
 import { createShowcase } from './apps/Showcase';
+import { createSpotify } from './apps/Spotify';
 import { createWordle } from './apps/Wordle';
 import { createTerminal } from './Terminal';
 import { createBrowser } from './apps/Browser';
@@ -65,6 +66,10 @@ export const icons = {
     '<rect x="3" y="4.5" width="18" height="15" rx="2"/>' +
       '<path d="m7 10 2.4 2-2.4 2"/><path d="M12.4 14.6h4.2"/>',
   ),
+  spotify: svg(
+    '<circle cx="12" cy="12" r="8.6"/><path d="M7.6 9.9a10 10 0 0 1 8.4.9"/>' +
+      '<path d="M8.2 12.6a7.6 7.6 0 0 1 6.6.8"/><path d="M8.8 15.2a5.4 5.4 0 0 1 4.8.6"/>',
+  ),
   credits: svg(
     '<circle cx="12" cy="12" r="8.5"/><path d="M12 11v5.5"/><path d="M12 7.8h.01"/>',
   ),
@@ -122,6 +127,14 @@ export const apps: AppDefinition[] = [
     width: 900,
     height: 620,
     render: createMusic,
+  },
+  {
+    id: 'spotify',
+    title: 'Spotify',
+    icon: icons.spotify,
+    width: 760,
+    height: 640,
+    render: createSpotify,
   },
   {
     id: 'wordle',

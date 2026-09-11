@@ -3920,61 +3920,147 @@
   }
 }
 
-/* --- Music: the Spotify pane --------------------------------------------- */
+/* --- Spotify ------------------------------------------------------------- */
 
-.music__nav-item--spotify.is-active {
-  color: #1db954;
-}
-
-.music__spotify {
+/*
+ * The embed owns the window. Everything above the link bar is Spotify's own
+ * document, so this is only a frame around it: their black, their radius,
+ * and a bar at the bottom for choosing what to load.
+ */
+.spotify {
   display: flex;
   flex-direction: column;
-  gap: 12px;
   height: 100%;
   min-height: 0;
+  padding: 12px;
+  gap: 10px;
+  background: #0b0b0b;
+  color: #f2f2f4;
 }
 
-.music__spotify-title {
-  margin: 0 0 5px;
+.spotify__stage {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  border-radius: 12px;
+  background: #121212;
+  overflow: hidden;
+}
+
+.spotify__frame {
+  flex: 1;
+  width: 100%;
+  min-height: 0;
+  border: 0;
+  background: #121212;
+  opacity: 0;
+  transition: opacity 0.24s ease;
+}
+
+.spotify__frame.is-ready {
+  opacity: 1;
+}
+
+/* --- The empty state ----------------------------------------------------- */
+
+.spotify__empty {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 10px;
+  padding: 28px 34px;
+  text-align: left;
+}
+
+.spotify__empty-title {
+  margin: 0;
   font-size: 24px;
+  font-weight: 650;
   letter-spacing: -0.02em;
 }
 
-.music__spotify-note {
+.spotify__empty-note {
   margin: 0;
-  max-width: 560px;
+  max-width: 44ch;
   font-size: 12.5px;
-  line-height: 1.6;
-  color: rgba(255, 255, 255, 0.52);
+  line-height: 1.65;
+  color: rgba(255, 255, 255, 0.5);
 }
 
-.music__spotify-frame {
-  flex: 1;
-  min-height: 232px;
-  width: 100%;
-  border: 0;
-  border-radius: 12px;
-  background: #121212;
-}
+/* --- The link bar -------------------------------------------------------- */
 
-.music__spotify-form {
+.spotify__bar {
   display: flex;
-  gap: 8px;
   flex: 0 0 auto;
+  gap: 8px;
 }
 
-.music__spotify-go {
-  padding: 9px 18px;
+.spotify__input {
+  flex: 1;
+  min-width: 0;
+  padding: 9px 13px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.05);
+  color: inherit;
+  font: inherit;
+  font-size: 12.5px;
+  outline: none;
+  transition: border-color 0.16s ease, background 0.16s ease;
+}
+
+.spotify__input::placeholder {
+  color: rgba(255, 255, 255, 0.34);
+}
+
+.spotify__input:focus {
+  border-color: rgba(29, 185, 84, 0.75);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.spotify__go {
+  padding: 9px 20px;
   border: 0;
   border-radius: 8px;
   background: #1db954;
   color: #04170b;
   font: inherit;
   font-size: 12.5px;
-  font-weight: 600;
+  font-weight: 650;
   cursor: pointer;
+  transition: background 0.16s ease, transform 0.16s ease;
 }
 
-.music__spotify-go:hover {
+.spotify__go:hover {
   background: #27d967;
+}
+
+.spotify__go:active {
+  transform: scale(0.97);
+}
+
+.spotify__status {
+  margin: 0;
+  min-height: 0;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.spotify__status:empty {
+  display: none;
+}
+
+.spotify__status.is-error {
+  color: #ff6b6b;
+}
+
+/* The bar stacks before the input gets too narrow to read a link in. */
+@media (max-width: 460px) {
+  .spotify__bar {
+    flex-wrap: wrap;
+  }
+
+  .spotify__go {
+    flex: 1;
+  }
 }

@@ -20,6 +20,10 @@ interface SceneHandlers {
   caseCam: (canvas: HTMLCanvasElement) => () => void;
   /** Move the room camera. */
   setView: (view: RoomView) => void;
+  /** Return the room camera to its resting pose. */
+  resetView: () => void;
+  /** Toggle browser fullscreen. */
+  toggleFullscreen: () => void;
 }
 
 let handlers: Handlers | null = null;
@@ -59,6 +63,20 @@ export function mountCaseCam(canvas: HTMLCanvasElement): () => void {
 
 export function setRoomView(view: RoomView) {
   scene?.setView(view);
+}
+
+/*
+ * At the screen view the glass fills the viewport, so the page's own floating
+ * controls would sit on top of the menu bar. They are hidden there and these
+ * two stand in for them from inside the menu bar instead — which is where a
+ * Mac keeps its controls anyway.
+ */
+export function resetCameraView() {
+  scene?.resetView();
+}
+
+export function toggleFullscreen() {
+  scene?.toggleFullscreen();
 }
 
 export function hasCaseCam() {

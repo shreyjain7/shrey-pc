@@ -82,6 +82,8 @@ export class Experience {
     registerScene({
       caseCam: (canvas) => this.mountCaseCam(canvas),
       setView: (view) => this.setView(view),
+      resetView: () => this.camera.resetView(),
+      toggleFullscreen: () => this.toggleFullscreen(),
     });
 
     document.body.classList.add('is-loading', 'is-idle');
@@ -168,6 +170,17 @@ export class Experience {
   /* ---------------------------------------------------------------------- */
   /* Navigation                                                              */
   /* ---------------------------------------------------------------------- */
+
+  /** One implementation, called from the corner pill and from the menu bar. */
+  toggleFullscreen() {
+    if (document.fullscreenElement) {
+      void document.exitFullscreen();
+      return;
+    }
+    void document.documentElement.requestFullscreen?.().catch(() => {
+      // iOS Safari has no Fullscreen API on iPhone; nothing to fall back to.
+    });
+  }
 
   private enterScreen() {
     this.setView('screen');
@@ -522,13 +535,7 @@ export class Experience {
 
     const fullscreenButton = this.iconButton('Fullscreen', ICON_EXPAND, () => {
       this.audio.click();
-      if (document.fullscreenElement) {
-        void document.exitFullscreen();
-      } else {
-        void document.documentElement.requestFullscreen?.().catch(() => {
-          // iOS Safari has no Fullscreen API on iPhone; nothing to fall back to.
-        });
-      }
+      this.toggleFullscreen();
     });
     document.addEventListener('fullscreenchange', () => {
       fullscreenButton.innerHTML = document.fullscreenElement ? ICON_COLLAPSE : ICON_EXPAND;

@@ -601,3 +601,16 @@ body.is-workstation .social {
     animation: none;
   }
 }
+
+/* --- Chrome that would sit on the menu bar -------------------------------
+   At the screen view the glass fills the viewport: the corner controls land
+   on the clock and the STEP BACK pill lands on the Apple menu. Both are
+   hidden there, and the menu bar carries view / reset / fullscreen / sound
+   itself — which is where a Mac keeps them anyway. */
+
+body.is-ready.is-focused .controls,
+body.is-ready.is-focused .exit {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}

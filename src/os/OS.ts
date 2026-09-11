@@ -9,7 +9,13 @@ import { closeContextMenu, openContextMenu } from './ContextMenu';
 import { basename, fs, HOME, join } from './fs';
 import { mountNotifications, notify } from './Notifications';
 import { settings } from './settings';
-import { openPath, registerSystem, setRoomView } from './system';
+import {
+  openPath,
+  registerSystem,
+  resetCameraView,
+  setRoomView,
+  toggleFullscreen,
+} from './system';
 import { setTerminalKeySound } from './Terminal';
 import { askForName, confirmAction, el, svg } from './ui';
 import { WindowManager } from './WindowManager';
@@ -53,6 +59,7 @@ const MENU_ICONS = {
       '<path d="M16 9.2 21 6.6v10.8L16 14.8z"/><path d="M6.5 19h7"/>',
   ),
   sound: svg('<path d="M11 5 6.5 8.8H3.4v6.4h3.1L11 19z"/><path d="M15.4 9.2a4 4 0 0 1 0 5.6"/>'),
+  expand: svg('<path d="M9 4.5H4.5V9"/><path d="M15 4.5h4.5V9"/><path d="M9 19.5H4.5V15"/><path d="M15 19.5h4.5V15"/>'),
 };
 
 const DESKTOP_DIR = join(HOME, 'Desktop');
@@ -644,7 +651,25 @@ export class OS {
       this.calendar.classList.toggle('is-open');
     });
 
-    tray.append(this.viewButton, sound, clock);
+    const recentre = el('button', 'menubar__item');
+    recentre.type = 'button';
+    recentre.title = 'Reset view';
+    recentre.innerHTML = MENU_ICONS.refresh;
+    recentre.addEventListener('click', () => {
+      this.audio.click();
+      resetCameraView();
+    });
+
+    const expand = el('button', 'menubar__item');
+    expand.type = 'button';
+    expand.title = 'Fullscreen';
+    expand.innerHTML = MENU_ICONS.expand;
+    expand.addEventListener('click', () => {
+      this.audio.click();
+      toggleFullscreen();
+    });
+
+    tray.append(this.viewButton, recentre, expand, sound, clock);
     menubar.append(apple, this.appName, menus, tray);
 
     /* --- Dock ----------------------------------------------------------- */

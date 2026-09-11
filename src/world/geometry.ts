@@ -1,4 +1,11 @@
-import { BufferGeometry, ExtrudeGeometry, Shape } from 'three';
+import {
+  BufferGeometry,
+  CatmullRomCurve3,
+  ExtrudeGeometry,
+  Shape,
+  TubeGeometry,
+  Vector3,
+} from 'three';
 
 /** A rounded rectangle centred on the origin, for extruding. */
 export function roundedRectShape(width: number, height: number, radius: number): Shape {
@@ -82,4 +89,26 @@ export function taperAlongZ(geometry: BufferGeometry, backScale: number, depth: 
   position.needsUpdate = true;
   geometry.computeVertexNormals();
   return geometry;
+}
+
+/**
+ * A drooping cable between two points.
+ *
+ * The sag is a real catenary rather than a straight line with a kink: three
+ * control points through a Catmull-Rom curve, with the middle one pulled down
+ * by `sag`. Cables are what stop the desk reading as objects floating near
+ * each other, so it is worth the extra tube.
+ */
+export function cable(
+  from: Vector3,
+  to: Vector3,
+  sag = 0.12,
+  radius = 0.006,
+  segments = 24,
+) {
+  const middle = from.clone().add(to).multiplyScalar(0.5);
+  middle.y -= sag;
+
+  const curve = new CatmullRomCurve3([from.clone(), middle, to.clone()]);
+  return new TubeGeometry(curve, segments, radius, 6, false);
 }

@@ -341,17 +341,27 @@ export class WindowManager {
     this.makeDraggable(entry, bar);
     if (!this.compact) this.makeResizable(entry, grips);
 
-    // Grow in from just under full size, with the faintest overshoot.
+    // Grow out of the app's own dock icon, the mirror of the genie it will
+    // minimise with. Without an icon to come from — an app not in the dock, or
+    // a compact layout with no room for one — it just drops in.
     entry.motion.opacity = 0;
-    entry.motion.scale.set(0.9);
-    entry.motion.y.set(18);
+    const from = reducedMotion ? null : this.anchorOffset(entry);
+    if (from) {
+      entry.motion.scale.set(0.2);
+      entry.motion.x.set(from.x);
+      entry.motion.y.set(from.y);
+    } else {
+      entry.motion.scale.set(0.9);
+      entry.motion.y.set(18);
+    }
     this.applyTransform(entry);
 
     requestAnimationFrame(() => {
       root.classList.add('is-open');
       entry.motion.scale.to(1);
+      entry.motion.x.to(0);
       entry.motion.y.to(0);
-      void this.fade(entry, 1, reducedMotion ? 0 : 220);
+      void this.fade(entry, 1, reducedMotion ? 0 : 260);
     });
 
     // Tell the hardware something just started.
@@ -605,12 +615,10 @@ export class WindowManager {
     entry.root.classList.add('is-minimised');
     entry.root.classList.remove('is-focused');
 
-    const anchor = this.taskbarAnchor(id);
-    if (anchor) {
-      const centreX = entry.root.offsetLeft + entry.root.offsetWidth / 2;
-      const centreY = entry.root.offsetTop + entry.root.offsetHeight / 2;
-      entry.motion.x.to(anchor.x - centreX);
-      entry.motion.y.to(anchor.y - centreY);
+    const offset = this.anchorOffset(entry);
+    if (offset) {
+      entry.motion.x.to(offset.x);
+      entry.motion.y.to(offset.y);
     } else {
       entry.motion.y.to(entry.root.offsetHeight * 0.4);
     }
@@ -620,6 +628,23 @@ export class WindowManager {
     const next = this.focusedId;
     if (next) this.focus(next);
     this.onChange();
+  }
+
+  /**
+   * How far a window's centre is from its own dock icon, in screen pixels.
+   *
+   * Shared by every transition that should look like it involves the dock:
+   * opening grows out of the icon, minimising genies back into it, closing
+   * shrinks toward it. Null when the app has no icon to fly to, in which case
+   * callers fall back to a plain drop.
+   */
+  private anchorOffset(entry: ManagedWindow) {
+    const anchor = this.taskbarAnchor(entry.app.id);
+    if (!anchor) return null;
+
+    const centreX = entry.root.offsetLeft + entry.root.offsetWidth / 2;
+    const centreY = entry.root.offsetTop + entry.root.offsetHeight / 2;
+    return { x: anchor.x - centreX, y: anchor.y - centreY };
   }
 
   private restoreFrom(entry: ManagedWindow) {
@@ -679,9 +704,17 @@ export class WindowManager {
     this.windows.delete(id);
     this.order = this.order.filter((entryId) => entryId !== id);
 
-    entry.motion.scale.to(0.92);
-    entry.motion.y.to(10);
-    void this.fade(entry, 0, reducedMotion ? 0 : 170).then(() => {
+    // Shrink back toward the icon it came out of.
+    const into = reducedMotion ? null : this.anchorOffset(entry);
+    if (into) {
+      entry.motion.scale.to(0.24);
+      entry.motion.x.to(into.x);
+      entry.motion.y.to(into.y);
+    } else {
+      entry.motion.scale.to(0.92);
+      entry.motion.y.to(10);
+    }
+    void this.fade(entry, 0, reducedMotion ? 0 : 190).then(() => {
       // Let the app tear down timers and listeners before the DOM goes.
       entry.content.dispatchEvent(new CustomEvent('app:destroy'));
       for (const spring of [entry.motion.scale, entry.motion.x, entry.motion.y, entry.motion.tilt]) {

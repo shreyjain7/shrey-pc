@@ -1001,11 +1001,105 @@
 }
 
 .menubar__menu {
+  padding: 2px 7px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
   cursor: default;
 }
 
 .menubar__menu:hover {
   color: #fff;
+}
+
+.menubar__menu--app {
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: rgba(255, 255, 255, 0.94);
+}
+
+/* Open reads as selected, the way the real bar highlights the live menu. */
+.menubar__menu.is-open {
+  background: var(--accent);
+  color: #08121c;
+}
+
+/* --- Menu bar drop-downs ------------------------------------------------- */
+
+.mbmenu {
+  position: absolute;
+  z-index: 880;
+  display: none;
+  min-width: 210px;
+  padding: 5px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: rgba(20, 26, 36, 0.98);
+  backdrop-filter: saturate(180%) blur(22px);
+  -webkit-backdrop-filter: saturate(180%) blur(22px);
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.6);
+}
+
+.mbmenu.is-open {
+  display: block;
+  animation: menu-in 110ms ease-out;
+}
+
+.mbmenu__item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 5px 9px;
+  border: 0;
+  border-radius: 5px;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: default;
+}
+
+.mbmenu__item:hover:not(:disabled) {
+  background: var(--accent);
+  color: #08121c;
+}
+
+.mbmenu__item:disabled {
+  color: var(--faint);
+}
+
+/* A fixed gutter, so labels line up whether or not a row is ticked. */
+.mbmenu__tick {
+  flex: 0 0 auto;
+  width: 11px;
+  font-size: 11px;
+  opacity: 0.9;
+}
+
+.mbmenu__label {
+  flex: 1 1 auto;
+  white-space: nowrap;
+}
+
+.mbmenu__key {
+  flex: 0 0 auto;
+  padding-left: 20px;
+  color: var(--faint);
+  font-size: 12px;
+}
+
+.mbmenu__item:hover:not(:disabled) .mbmenu__key {
+  color: rgba(8, 18, 28, 0.66);
+}
+
+.mbmenu__separator {
+  height: 1px;
+  margin: 5px 9px;
+  background: var(--line-soft);
 }
 
 .menubar__tray {

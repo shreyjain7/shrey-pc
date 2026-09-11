@@ -7,6 +7,8 @@ import { apps, appsById, icons } from './apps';
 import { fileIcon } from './apps/Explorer';
 import { closeContextMenu, openContextMenu } from './ContextMenu';
 import { basename, fs, HOME, join } from './fs';
+import { MenuBar } from './MenuBar';
+import type { BarItem, BarMenu } from './MenuBar';
 import { mountNotifications, notify } from './Notifications';
 import { settings } from './settings';
 import {
@@ -112,7 +114,7 @@ export class OS {
   /** Which room camera the shell believes it is being viewed from. */
   private view: 'room' | 'workstation' | 'screen' = 'screen';
   private viewButton!: HTMLButtonElement;
-  private appName!: HTMLElement;
+  private menuBar!: MenuBar;
   /** Dock buttons by app id, reused across syncs. */
   private dockButtons = new Map<string, HTMLElement>();
 
@@ -128,6 +130,11 @@ export class OS {
 
     this.iconGrid = el('div', 'icons');
     this.windowLayer = el('div', 'windows');
+
+    // Before any chrome: the menu bar names itself after the frontmost window,
+    // so it has to have something to ask. Constructing the manager only stores
+    // these two elements — nothing is mounted until a window opens.
+    this.manager = new WindowManager(this.windowLayer, this.root, () => this.audio.click());
 
     const startBits = this.buildStartMenu();
     this.startMenu = startBits.menu;
@@ -161,7 +168,6 @@ export class OS {
     mountNotifications(this.root);
     settings.attach(this.root);
 
-    this.manager = new WindowManager(this.windowLayer, this.root, () => this.audio.click());
     this.manager.setOnChange(() => this.syncTaskbar());
     // Minimising genies toward the app's own taskbar button, so the manager
     // needs to be able to ask where that button currently is.
@@ -431,6 +437,9 @@ export class OS {
       if (!target.closest('.calendar') && !target.closest('.menubar__clock')) {
         this.calendar.classList.remove('is-open');
       }
+      if (!target.closest('.mbmenu') && !target.closest('.menubar__menu')) {
+        this.menuBar?.close();
+      }
       if (target === this.desktop || target === this.iconGrid) {
         this.selected = null;
         this.renderIcons();
@@ -631,12 +640,16 @@ export class OS {
       this.toggleStart();
     });
 
-    this.appName = el('span', 'menubar__app', 'Finder');
-
-    const menus = el('div', 'menubar__menus');
-    for (const label of ['File', 'Edit', 'View', 'Window']) {
-      menus.append(el('span', 'menubar__menu', label));
-    }
+    this.menuBar = new MenuBar(
+      this.desktop,
+      this.barMenus(),
+      () => {
+        this.startMenu.classList.remove('is-open');
+        this.calendar.classList.remove('is-open');
+        closeContextMenu();
+      },
+      () => this.audio.click(),
+    );
 
     const tray = el('div', 'menubar__tray');
 
@@ -691,7 +704,7 @@ export class OS {
     });
 
     tray.append(this.viewButton, recentre, expand, sound, clock);
-    menubar.append(apple, this.appName, menus, tray);
+    menubar.append(apple, this.menuBar.element, tray);
 
     /* --- Dock ----------------------------------------------------------- */
 
@@ -745,6 +758,236 @@ export class OS {
     dock.addEventListener('pointerleave', () => apply(null));
   }
 
+  /* ---------------------------------------------------------------------- */
+  /* Menu bar menus                                                          */
+  /* ---------------------------------------------------------------------- */
+
+  /**
+   * The field Edit ▸ Copy should act on.
+   *
+   * The menu bar deliberately refuses focus, so whatever was being typed into
+   * is still the active element by the time an item is clicked. Anything that
+   * is not a text field means the whole Edit menu greys out, the way it does
+   * when nothing is editable.
+   */
+  private editTarget(): HTMLInputElement | HTMLTextAreaElement | null {
+    const node = document.activeElement;
+    if (node instanceof HTMLTextAreaElement) return node;
+    if (node instanceof HTMLInputElement && /^(text|search|url|email|password|tel)$/.test(node.type)) {
+      return node;
+    }
+    return null;
+  }
+
+  private barMenus(): BarMenu[] {
+    const frontmost = () => this.manager.focusedApp();
+    const openById = (id: string) => {
+      const app = appsById.get(id);
+      if (app) this.manager.open(app);
+    };
+
+    /** execCommand is the only route to a field's own undo stack. */
+    const edit = (command: string) => () => {
+      const field = this.editTarget();
+      if (!field) return;
+      field.focus();
+      document.execCommand(command);
+    };
+
+    return [
+      {
+        title: () => frontmost()?.title ?? 'Finder',
+        bold: true,
+        items: () => {
+          const app = frontmost();
+          return [
+            { label: 'About ' + (app?.title ?? 'This Computer'), action: () => openById('credits') },
+            { label: 'Settings…', shortcut: '⌘,', action: () => openById('settings') },
+            { separator: true },
+            {
+              label: 'Hide ' + (app?.title ?? 'Finder'),
+              shortcut: '⌘H',
+              disabled: !app,
+              action: () => app && this.manager.minimise(app.id),
+            },
+            {
+              label: 'Hide Others',
+              shortcut: '⌥⌘H',
+              disabled: this.manager.running.length < 2,
+              action: () => this.hideOthers(),
+            },
+            { separator: true },
+            {
+              label: 'Quit ' + (app?.title ?? 'Finder'),
+              shortcut: '⌘Q',
+              disabled: !app,
+              action: () => app && this.manager.close(app.id),
+            },
+          ];
+        },
+      },
+      {
+        title: () => 'File',
+        items: () => [
+          { label: 'New Finder Window', shortcut: '⌘N', action: () => openById('explorer') },
+          {
+            label: 'New Folder',
+            shortcut: '⇧⌘N',
+            action: () =>
+              askForName(this.root, 'New folder', 'untitled folder', (value) => {
+                if (!fs.mkdir(join(DESKTOP_DIR, value))) {
+                  notify('Could not create', 'Something already has that name.');
+                }
+              }),
+          },
+          { separator: true },
+          {
+            label: 'Close Window',
+            shortcut: '⌘W',
+            disabled: !frontmost(),
+            action: () => {
+              const id = this.manager.focusedId;
+              if (id) this.manager.close(id);
+            },
+          },
+          {
+            label: 'Close All Windows',
+            shortcut: '⌥⌘W',
+            disabled: !this.manager.running.length,
+            action: () => this.manager.closeAll(),
+          },
+        ],
+      },
+      {
+        title: () => 'Edit',
+        items: () => {
+          const field = this.editTarget();
+          const selected = Boolean(
+            field && field.selectionStart !== field.selectionEnd,
+          );
+          return [
+            { label: 'Undo', shortcut: '⌘Z', disabled: !field, action: edit('undo') },
+            { label: 'Redo', shortcut: '⇧⌘Z', disabled: !field, action: edit('redo') },
+            { separator: true },
+            { label: 'Cut', shortcut: '⌘X', disabled: !selected, action: edit('cut') },
+            { label: 'Copy', shortcut: '⌘C', disabled: !selected, action: edit('copy') },
+            { label: 'Paste', shortcut: '⌘V', disabled: !field, action: () => this.paste() },
+            { separator: true },
+            {
+              label: 'Select All',
+              shortcut: '⌘A',
+              disabled: !field,
+              action: () => {
+                field?.focus();
+                field?.select();
+              },
+            },
+          ];
+        },
+      },
+      {
+        title: () => 'View',
+        items: () => [
+          {
+            label: 'Screen',
+            checked: this.view === 'screen',
+            action: () => setRoomView('screen'),
+          },
+          {
+            label: 'Workstation',
+            checked: this.view === 'workstation',
+            action: () => setRoomView('workstation'),
+          },
+          { label: 'Room', checked: this.view === 'room', action: () => setRoomView('room') },
+          { separator: true },
+          { label: 'Reset Camera', shortcut: '⌘0', action: () => resetCameraView() },
+          { label: 'Toggle Full Screen', shortcut: '⌃⌘F', action: () => toggleFullscreen() },
+        ],
+      },
+      {
+        title: () => 'Window',
+        items: () => {
+          const id = this.manager.focusedId;
+          const items: BarItem[] = [
+            {
+              label: 'Minimise',
+              shortcut: '⌘M',
+              disabled: !id,
+              action: () => id && this.manager.minimise(id),
+            },
+            {
+              label: 'Zoom',
+              disabled: !id,
+              action: () => id && this.manager.toggleMaximise(id),
+            },
+            { separator: true },
+            {
+              label: 'Move Left',
+              shortcut: '⌥←',
+              disabled: !id,
+              action: () => id && this.manager.snap(id, 'left'),
+            },
+            {
+              label: 'Move Right',
+              shortcut: '⌥→',
+              disabled: !id,
+              action: () => id && this.manager.snap(id, 'right'),
+            },
+          ];
+
+          // Everything running, so a buried window can be brought forward.
+          const running = this.manager.running;
+          if (running.length) {
+            items.push({ separator: true });
+            for (const entry of running) {
+              const app = appsById.get(entry);
+              if (!app) continue;
+              items.push({
+                label: app.title,
+                checked: entry === id,
+                action: () => this.manager.toggle(app),
+              });
+            }
+          }
+
+          return items;
+        },
+      },
+    ];
+  }
+
+  /** Everything except the frontmost window, out of the way. */
+  private hideOthers() {
+    const keep = this.manager.focusedId;
+    for (const id of this.manager.running) {
+      if (id !== keep) this.manager.minimise(id);
+    }
+  }
+
+  /**
+   * Paste has no execCommand route left — browsers block it — so it goes
+   * through the clipboard API, which can be refused. Say so rather than
+   * failing silently.
+   */
+  private paste() {
+    const field = this.editTarget();
+    if (!field) return;
+
+    navigator.clipboard
+      ?.readText()
+      .then((text) => {
+        if (!text) return;
+        field.focus();
+        const start = field.selectionStart ?? field.value.length;
+        const end = field.selectionEnd ?? start;
+        field.value = field.value.slice(0, start) + text + field.value.slice(end);
+        const caret = start + text.length;
+        field.setSelectionRange(caret, caret);
+        field.dispatchEvent(new Event('input', { bubbles: true }));
+      })
+      .catch(() => notify('Paste blocked', 'The browser would not hand over the clipboard.'));
+  }
+
   /**
    * Reconciles the dock rather than rebuilding it.
    *
@@ -758,8 +1001,8 @@ export class OS {
     // The system monitor's process table reads this off the screen root.
     this.root.dataset.running = this.manager.running.join(',');
 
-    if (this.appName) {
-      this.appName.textContent = focused ? appsById.get(focused)?.title ?? 'Finder' : 'Finder';
+    if (this.menuBar) {
+      this.menuBar.refresh();
     }
 
     // Favourites always sit in the dock; anything else joins while it runs.
@@ -866,6 +1109,7 @@ export class OS {
 
   private closeMenus() {
     closeContextMenu();
+    this.menuBar?.close();
     this.startMenu.classList.remove('is-open');
     this.calendar.classList.remove('is-open');
   }

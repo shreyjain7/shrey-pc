@@ -768,26 +768,48 @@ export class OS {
 
     const apply = (clientX: number | null) => {
       const icons = Array.from(host.children) as HTMLElement[];
+      if (!icons.length) return;
+
+      if (clientX === null) {
+        for (const icon of icons) {
+          icon.style.removeProperty('--mag');
+          icon.style.removeProperty('--push');
+        }
+        return;
+      }
 
       // Reach is measured in icons, not pixels. The desktop is projected onto
       // the monitor through a 3D transform, so its on-screen scale changes
       // with the camera — a fixed pixel radius would cover the whole dock from
       // the room and barely one icon up close.
-      const reach = (icons[0]?.getBoundingClientRect().width || 46) * 2.4;
+      const width = icons[0].getBoundingClientRect().width || 46;
+      const reach = width * 2.4;
 
-      for (const icon of icons) {
-        if (clientX === null) {
-          icon.style.removeProperty('--mag');
-          continue;
-        }
+      const scales = icons.map((icon) => {
         const box = icon.getBoundingClientRect();
-        const centre = box.left + box.width / 2;
+        // The layout centre, not the rendered one: reading back a position
+        // this pass has already displaced would chase its own tail.
+        const centre = box.left + box.width / 2 - (parseFloat(icon.style.getPropertyValue('--push')) || 0);
         const distance = Math.abs(clientX - centre);
         const falloff = Math.max(0, 1 - distance / reach);
         // Cosine easing, so the bulge has shoulders rather than a spike.
-        const scale = 1 + LIFT * (0.5 - Math.cos(falloff * Math.PI) / 2);
-        icon.style.setProperty('--mag', scale.toFixed(3));
-      }
+        return 1 + LIFT * (0.5 - Math.cos(falloff * Math.PI) / 2);
+      });
+
+      // Icons shove their neighbours aside rather than growing over them,
+      // which is the part that reads as a dock. Each one moves by however much
+      // everything between it and the left edge has swollen, and the whole run
+      // is then pulled back by half the total so the dock stays centred.
+      const extra = scales.map((scale) => (scale - 1) * width);
+      const total = extra.reduce((sum, value) => sum + value, 0);
+
+      let before = 0;
+      icons.forEach((icon, index) => {
+        const push = before + extra[index] / 2 - total / 2;
+        before += extra[index];
+        icon.style.setProperty('--mag', scales[index].toFixed(3));
+        icon.style.setProperty('--push', push.toFixed(2) + 'px');
+      });
     };
 
     dock.addEventListener('pointermove', (event) => apply(event.clientX));

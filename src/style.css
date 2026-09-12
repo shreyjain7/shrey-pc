@@ -474,8 +474,8 @@ body.is-overlay.is-workstation .controls {
    ========================================================================= */
 
 #os-overlay[data-kind='workstation'] {
-  top: 4vh;
-  bottom: 4vh;
+  top: calc(var(--vh, 100vh) * 0.04);
+  bottom: calc(var(--vh, 100vh) * 0.04);
   right: 2vw;
   left: auto;
   width: min(56vw, 980px);
@@ -613,4 +613,25 @@ body.is-ready.is-focused .exit {
   opacity: 0;
   visibility: hidden;
   pointer-events: none;
+}
+
+
+/* --- Touch --------------------------------------------------------------- */
+
+/*
+ * iOS Safari zooms the page in when a field smaller than 16px takes focus,
+ * and does not zoom back out afterwards — the OS is left sitting off the side
+ * of the screen. Every field is drawn at 16px on a touch device to stop it.
+ */
+@media (pointer: coarse) {
+  /*
+   * !important because this has to beat every component's own font-size —
+   * a bare element selector loses to any class — and the consequence of
+   * losing is the page zooming in and never coming back.
+   */
+  input,
+  textarea,
+  select {
+    font-size: 16px !important;
+  }
 }

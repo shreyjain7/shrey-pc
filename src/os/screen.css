@@ -1433,10 +1433,17 @@
 /* --- Compact desktop ----------------------------------------------------- */
 
 .screen.is-compact .icons {
-  top: 14px;
-  left: 12px;
-  right: 12px;
-  grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
+  /* Below the bar, not behind it — the bar grows with the notch. */
+  top: calc(38px + env(safe-area-inset-top));
+  left: max(10px, env(safe-area-inset-left));
+  right: max(10px, env(safe-area-inset-right));
+  /* Leaves room for the dock so the last row is never trapped under it. */
+  bottom: calc(78px + env(safe-area-inset-bottom));
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
+  grid-template-columns: repeat(auto-fill, minmax(76px, 1fr));
+  grid-auto-rows: min-content;
   gap: 2px;
 }
 
@@ -1545,41 +1552,106 @@
 }
 
 /* The taskbar stays 56px tall to match the window manager's arithmetic. */
-.screen.is-compact .taskbar {
-  gap: 8px;
-  padding: 0 8px;
+/*
+ * The dock on a phone.
+ *
+ * A dozen icons do not fit across 393px, so the rail scrolls sideways under
+ * the finger and sits above the home indicator rather than under it. The
+ * magnification hover does nothing on a touch screen, so the icons are simply
+ * smaller instead.
+ */
+.screen.is-compact .dock {
+  left: max(8px, env(safe-area-inset-left));
+  right: max(8px, env(safe-area-inset-right));
+  bottom: max(8px, env(safe-area-inset-bottom));
+  max-width: none;
+  transform: none;
+  padding: 5px;
+  border-radius: 16px;
 }
 
-.screen.is-compact .taskbar__start {
-  padding: 8px 12px 8px 10px;
-  font-size: 12px;
-}
-
-.screen.is-compact .taskbar__apps {
+.screen.is-compact .dock__apps {
   overflow-x: auto;
+  overscroll-behavior-x: contain;
+  -webkit-overflow-scrolling: touch;
   scrollbar-width: none;
+  /* The rail is the one place in the OS that may be dragged sideways. */
+  touch-action: pan-x;
 }
 
-.screen.is-compact .taskbar__apps::-webkit-scrollbar {
+.screen.is-compact .dock__apps::-webkit-scrollbar {
   display: none;
 }
 
-.screen.is-compact .taskbar__app {
-  flex: 0 0 auto;
-  max-width: 140px;
-  padding: 8px 10px;
+.screen.is-compact .dock__app {
+  width: 42px;
+}
+
+.screen.is-compact .dock__icon {
+  width: 38px;
+  height: 38px;
+}
+
+.screen.is-compact .dock__icon svg {
+  width: 20px;
+  height: 20px;
+}
+
+/* Hover labels have nothing to hover on a touch screen. */
+.screen.is-compact .dock__label {
+  display: none;
+}
+
+/*
+ * The menu bar on a phone.
+ *
+ * File/Edit/View/Window plus seven tray buttons overrun the width three times
+ * over, so the menu titles fold away — their items all live in the  menu and
+ * the dock — and the tray keeps only what is worth a thumb. The bar itself
+ * clears the notch.
+ */
+.screen.is-compact .menubar {
+  gap: 8px;
+  height: calc(30px + env(safe-area-inset-top));
+  padding-top: env(safe-area-inset-top);
+  padding-left: max(10px, env(safe-area-inset-left));
+  padding-right: max(10px, env(safe-area-inset-right));
   font-size: 12px;
 }
 
-.screen.is-compact .taskbar__clock {
-  font-size: 12px;
+.screen.is-compact .menubar__menus .menubar__menu:not(.menubar__menu--app) {
+  display: none;
+}
+
+.screen.is-compact .menubar__tray {
+  gap: 2px;
+}
+
+/*
+ * Spotlight stays — it is the only way to reach an app that has scrolled off
+ * the dock, and its shortcut needs a keyboard nobody has here. The camera
+ * switch and mute stay. Everything else is a menu item away.
+ */
+.screen.is-compact .menubar__item--overview,
+.screen.is-compact .menubar__item--reset,
+.screen.is-compact .menubar__item--full {
+  display: none;
+}
+
+.screen.is-compact .mbmenu {
+  left: max(6px, env(safe-area-inset-left)) !important;
+  right: max(6px, env(safe-area-inset-right));
+  width: auto;
+  min-width: 0;
 }
 
 .screen.is-compact .start-menu {
-  left: 8px;
-  right: 8px;
-  bottom: 62px;
+  left: max(8px, env(safe-area-inset-left));
+  right: max(8px, env(safe-area-inset-right));
+  bottom: calc(66px + env(safe-area-inset-bottom));
   width: auto;
+  max-height: calc(var(--vh, 100vh) * 0.6);
+  overflow-y: auto;
 }
 
 .screen.is-compact .start-menu__list {

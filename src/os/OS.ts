@@ -669,7 +669,7 @@ export class OS {
 
     const tray = el('div', 'menubar__tray');
 
-    const sound = el('button', 'menubar__item');
+    const sound = el('button', 'menubar__item menubar__item--sound');
     sound.type = 'button';
     sound.title = 'Sound';
     sound.innerHTML = MENU_ICONS.sound;
@@ -679,7 +679,7 @@ export class OS {
     });
     this.audio.setOnChange((muted) => sound.classList.toggle('is-off', muted));
 
-    const spot = el('button', 'menubar__item');
+    const spot = el('button', 'menubar__item menubar__item--spot');
     spot.type = 'button';
     spot.title = 'Spotlight (⌘K)';
     spot.innerHTML = MENU_ICONS.search;
@@ -690,7 +690,7 @@ export class OS {
       this.spotlight.open();
     });
 
-    const overview = el('button', 'menubar__item');
+    const overview = el('button', 'menubar__item menubar__item--overview');
     overview.type = 'button';
     overview.title = 'Mission Control (F3)';
     overview.innerHTML = MENU_ICONS.overview;
@@ -721,7 +721,7 @@ export class OS {
       this.calendar.classList.toggle('is-open');
     });
 
-    const recentre = el('button', 'menubar__item');
+    const recentre = el('button', 'menubar__item menubar__item--reset');
     recentre.type = 'button';
     recentre.title = 'Reset view';
     recentre.innerHTML = MENU_ICONS.refresh;
@@ -730,7 +730,7 @@ export class OS {
       resetCameraView();
     });
 
-    const expand = el('button', 'menubar__item');
+    const expand = el('button', 'menubar__item menubar__item--full');
     expand.type = 'button';
     expand.title = 'Fullscreen';
     expand.innerHTML = MENU_ICONS.expand;

@@ -112,9 +112,9 @@ export class WindowManager {
 
       if (this.compact) {
         entry.root.style.left = '12px';
-        entry.root.style.top = '12px';
+        entry.root.style.top = TOP_MARGIN + 'px';
         entry.root.style.width = box.width - 24 + 'px';
-        entry.root.style.height = maxHeight - 24 + 'px';
+        entry.root.style.height = maxHeight - TOP_MARGIN - 12 + 'px';
         continue;
       }
 
@@ -258,7 +258,7 @@ export class WindowManager {
       ? box.width - 24
       : Math.min(app.width, box.width - 80);
     const height = this.compact
-      ? box.height - TASKBAR_HEIGHT - 24
+      ? box.height - TASKBAR_HEIGHT - TOP_MARGIN - 12
       : Math.min(app.height, box.height - TASKBAR_HEIGHT - 80);
 
     // Cascade down and right, wrapping before windows walk off the screen.
@@ -271,7 +271,7 @@ export class WindowManager {
       ? 12
       : clamp(Math.round((box.width - width) / 2 - 60 + offset), 16, box.width - width - 16);
     const y = this.compact
-      ? 12
+      ? TOP_MARGIN
       : clamp(
           Math.round((box.height - TASKBAR_HEIGHT - height) / 2 - 40 + offset),
           TOP_MARGIN,

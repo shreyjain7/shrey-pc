@@ -63,8 +63,9 @@ export class World {
         run: () => {
           // Required before any RectAreaLight can be lit.
           RectAreaLightUniformsLib.init();
-          // Just enough haze for the lamp and window to read as volumes.
-          this.scene.fog = new FogExp2(0x0a0d14, quality === 'low' ? 0.05 : 0.08);
+          // Warm haze, so distance washes out toward the daylight rather than
+          // toward black. A dark fog in a bright room reads as grime.
+          this.scene.fog = new FogExp2(0xcbb99c, quality === 'low' ? 0.028 : 0.042);
           this.scene.add(new Room(quality).group);
         },
       },
@@ -106,11 +107,13 @@ export class World {
       {
         name: 'lighting.rig',
         run: () => {
-          this.scene.add(new AmbientLight(0x9099b5, 0.75));
-          this.scene.add(new HemisphereLight(0x6d7ea3, 0x2a211b, 1.05));
+          // Daylight: a bright warm sky, a bounce off the oak floor, and a sun
+          // angled in from the window side rather than from the front.
+          this.scene.add(new AmbientLight(0xf0e2c8, 1.15));
+          this.scene.add(new HemisphereLight(0xfff3dd, 0x6b4a2c, 1.6));
 
-          const key = new DirectionalLight(0xbfd0ff, 1.15);
-          key.position.set(-2.2, 3.4, 2.4);
+          const key = new DirectionalLight(0xfff0d4, 2.35);
+          key.position.set(2.6, 3.2, 1.2);
           key.castShadow = quality !== 'low';
           const shadowSize = quality === 'high' ? 2048 : 1024;
           key.shadow.mapSize.set(shadowSize, shadowSize);
@@ -123,9 +126,10 @@ export class World {
           key.shadow.bias = -0.0012;
           this.scene.add(key);
 
-          const rim = new DirectionalLight(0x8899cc, 0.5);
-          rim.position.set(2.6, 1.6, -2.2);
-          this.scene.add(rim);
+          // A cool fill from the opposite side keeps the beige from going flat.
+          const fill = new DirectionalLight(0xc9d8f0, 0.55);
+          fill.position.set(-2.8, 1.8, 1.6);
+          this.scene.add(fill);
         },
       },
       {

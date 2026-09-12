@@ -16,27 +16,28 @@ const WALL_X = 2.2;
 const CEILING_Y = 2.7;
 
 /**
- * The box the desk sits in: walls, a shuttered window throwing cold light
- * across the back wall, framed prints, a floating shelf and a rug.
+ * The box the desk sits in: cream walls, an oak floor, a blinded window with
+ * the afternoon coming through it, framed prints, a shelf and a rug.
  */
 export class Room {
   readonly group = new Group();
 
+  /** Warm painted plaster — the colour every office was in 1984. */
   private readonly wall = new MeshStandardMaterial({
-    color: 0x2f3140,
-    roughness: 0.95,
+    color: 0xd6c7ad,
+    roughness: 0.96,
     metalness: 0,
   });
 
   private readonly floorMaterial = new MeshStandardMaterial({
-    color: 0x1e222a,
-    roughness: 0.8,
-    metalness: 0.05,
+    color: 0x9a6f45,
+    roughness: 0.66,
+    metalness: 0.02,
   });
 
-  private readonly trim = new MeshStandardMaterial({ color: 0x15151b, roughness: 0.7 });
-  private readonly frame = new MeshStandardMaterial({ color: 0x14161c, roughness: 0.55 });
-  private readonly shelfWood = new MeshStandardMaterial({ color: 0x4a3423, roughness: 0.7 });
+  private readonly trim = new MeshStandardMaterial({ color: 0xe8dfcd, roughness: 0.72 });
+  private readonly frame = new MeshStandardMaterial({ color: 0xbcae95, roughness: 0.6 });
+  private readonly shelfWood = new MeshStandardMaterial({ color: 0x8a5f38, roughness: 0.66 });
 
   constructor(private quality: Quality) {
     this.buildShell();
@@ -154,10 +155,17 @@ export class Room {
       group.add(rail);
     }
 
-    const moon = new RectAreaLight(0x9dbcff, this.quality === 'low' ? 1.6 : 2.6, width, height);
-    moon.position.set(0, 0, 0.06);
-    moon.lookAt(0, -0.6, 3);
-    group.add(moon);
+    // Afternoon, not moonlight: this is what actually lights the room, so it
+    // is warm and several times the strength the night version needed.
+    const daylight = new RectAreaLight(
+      0xfff1d6,
+      this.quality === 'low' ? 7 : 11,
+      width,
+      height,
+    );
+    daylight.position.set(0, 0, 0.06);
+    daylight.lookAt(0, -0.8, 3);
+    group.add(daylight);
 
     group.position.set(1.28, 1.72, WALL_Z + 0.03);
     this.group.add(group);
@@ -268,8 +276,8 @@ export class Room {
       group.add(frond);
     }
 
-    // Warm bounce so the shelf is not a silhouette.
-    const glow = new PointLight(0xffc98a, 0.35, 1.1, 2);
+    // A little extra warmth under the shelf, where the window does not reach.
+    const glow = new PointLight(0xffd8a4, 0.22, 1.1, 2);
     glow.position.set(0.1, 0.16, 0.16);
     group.add(glow);
 

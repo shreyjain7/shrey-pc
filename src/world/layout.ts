@@ -1,38 +1,56 @@
 import { Vector3 } from 'three';
 
 /**
- * One place for the numbers the camera, the monitor and the CSS3D screen all
+ * One place for the numbers the camera, the machine and the CSS3D screen all
  * have to agree on. Scene units are metres.
  */
 
 export const DESK = {
-  top: 0.75,
-  width: 1.98,
-  depth: 0.92,
-  thickness: 0.04,
+  top: 0.74,
+  width: 1.72,
+  depth: 0.78,
+  thickness: 0.035,
   /** Centre of the top along Z; the front edge lands at centreZ + depth/2. */
   centreZ: -0.16,
 };
 
+/**
+ * The compact Macintosh.
+ *
+ * Proportioned after the 1984 all-in-one — taller than it is wide, deep, and
+ * with far more plastic below the glass than above it, which is what makes the
+ * silhouette read — but scaled off the screen rather than off the real case.
+ * A true 9" tube is 175mm across, and an operating system is unreadable at
+ * that size from across a room, so the glass keeps its useful width and the
+ * body is built around it. The shape is honest; the scale is not.
+ */
 export const MONITOR = {
   /** Visible glass, 4:3. */
-  screenWidth: 0.46,
-  screenHeight: 0.345,
-  /** Thickness of the plastic around the glass. */
-  bezel: 0.035,
-  /** CRTs are deep — this is what sells the silhouette. */
-  bodyDepth: 0.44,
-  standHeight: 0.055,
-  /** Front face of the bezel. */
+  screenWidth: 0.42,
+  screenHeight: 0.315,
+
+  bodyWidth: 0.54,
+  bodyHeight: 0.63,
+  bodyDepth: 0.46,
+
+  /** Plastic above the glass, and the much deeper band below it. */
+  brow: 0.075,
+  chin: 0.24,
+
+  /** Front face of the case. */
   frontZ: -0.02,
 };
 
-/** The glass sits a hair behind the front of the bezel. */
-export const SCREEN_Z = MONITOR.frontZ - 0.004;
+/** The glass is recessed into its well rather than flush with the front. */
+export const SCREEN_Z = MONITOR.frontZ - 0.018;
 
+/**
+ * Screen centre. The case stands on the desk — no stand, no neck — so this is
+ * measured up from the desk through the chin.
+ */
 export const SCREEN_CENTER = new Vector3(
   0,
-  DESK.top + MONITOR.standHeight + MONITOR.bezel + MONITOR.screenHeight / 2,
+  DESK.top + MONITOR.chin + MONITOR.screenHeight / 2,
   SCREEN_Z,
 );
 
@@ -50,31 +68,32 @@ export const PX_TO_M = MONITOR.screenWidth / SCREEN_PX.width;
 
 /** Where the camera rests when nothing is focused. */
 export const IDLE_CAMERA = {
-  position: new Vector3(0.34, 1.4, 1.52),
-  target: new Vector3(0, 1.06, -0.15),
+  position: new Vector3(0.30, 1.42, 1.34),
+  target: new Vector3(0, 1.08, -0.14),
 };
 
 /**
- * Where the tower sits. On the desk rather than under it, and angled so the
- * glass panel faces the resting camera — the machine is meant to be watched
- * while it works, not hidden by a desk leg.
+ * The external drive, in the place a second floppy or a 20MB disk actually
+ * sat: on the desk beside the machine, turned a little toward the room. It
+ * carries the telemetry the tower used to — this is still the box whose
+ * fan speed and disk light the OS drives.
  */
 export const TOWER = {
-  position: new Vector3(-0.6, DESK.top, -0.16),
-  /** Negative yaw swings the +X glass side toward the idle camera. */
-  rotationY: -0.4,
+  position: new Vector3(-0.47, DESK.top, -0.1),
+  /** Positive yaw turns its front-left corner toward the resting camera. */
+  rotationY: 0.34,
 };
 
 /**
  * The workstation pose.
  *
  * The OS docks over the right of the viewport here, so this is framed for the
- * strip that is left over: the tower lands at about a quarter of the way
- * across, with the keyboard and the near edge of the CRT beside it. Aiming
- * right of the desk's centre is what pushes the machine into that strip
- * instead of leaving it behind the dock.
+ * strip that is left over: the drive lands about a quarter of the way across,
+ * with the keyboard and the near edge of the Macintosh beside it. Aiming right
+ * of the desk's centre is what pushes the machine into that strip instead of
+ * leaving it behind the dock.
  */
 export const WORKSTATION_CAMERA = {
-  position: new Vector3(1.3, 1.42, 2.0),
-  target: new Vector3(0.16, 1.0, -0.1),
+  position: new Vector3(1.18, 1.44, 1.76),
+  target: new Vector3(0.14, 1.02, -0.1),
 };

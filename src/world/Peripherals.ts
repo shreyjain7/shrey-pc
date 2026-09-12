@@ -62,16 +62,18 @@ export class Peripherals {
   private readonly cones: Mesh[] = [];
   private readonly keyLeds: MeshBasicMaterial[] = [];
 
+  /** The same platinum beige as the machine, so the set reads as one. */
   private readonly plastic = new MeshStandardMaterial({
-    color: 0xb9b3a4,
-    roughness: 0.72,
-    metalness: 0.02,
+    color: 0xd8d0be,
+    roughness: 0.78,
+    metalness: 0.01,
   });
 
-  private readonly darkPlastic = new MeshStandardMaterial({
-    color: 0x26262b,
-    roughness: 0.55,
-    metalness: 0.08,
+  /** Beige a shade down, for keycaps and the legend strip. */
+  private readonly capPlastic = new MeshStandardMaterial({
+    color: 0xcfc6b1,
+    roughness: 0.84,
+    metalness: 0.01,
   });
 
   private readonly metal = new MeshStandardMaterial({
@@ -79,8 +81,6 @@ export class Peripherals {
     roughness: 0.35,
     metalness: 0.85,
   });
-
-  private readonly rubber = new MeshStandardMaterial({ color: 0x1a1a1f, roughness: 0.95 });
 
   constructor(private quality: Quality) {
     this.group.add(
@@ -94,7 +94,7 @@ export class Peripherals {
     );
 
     if (quality !== 'low') {
-      this.group.add(this.buildSpeakers(), this.buildHeadphones(), this.buildStickyNotes());
+      this.group.add(this.buildFloppies(), this.buildStickyNotes());
     }
 
     const lamp = this.buildLamp();
@@ -107,7 +107,7 @@ export class Peripherals {
   private buildMousepad() {
     const pad = new Mesh(
       roundedSlab(0.26, 0.19, 0.012, { depth: 0.004 }),
-      new MeshStandardMaterial({ color: 0x1d2027, roughness: 0.96 }),
+      new MeshStandardMaterial({ color: 0x6f5a44, roughness: 0.96 }),
     );
     pad.rotation.x = -Math.PI / 2;
     pad.position.set(0.3, DESK.top + 0.002, 0.1);
@@ -117,8 +117,10 @@ export class Peripherals {
 
   private buildKeyboard() {
     const group = new Group();
-    const width = 0.44;
-    const depth = 0.155;
+    // The 1984 board was tiny — no numeric pad, no function row, barely wider
+    // than the machine's own chin.
+    const width = 0.335;
+    const depth = 0.13;
 
     const base = new Mesh(
       roundedSlab(width, depth, 0.008, { depth: 0.018, bevel: 0.003 }),
@@ -131,15 +133,15 @@ export class Peripherals {
 
     // Keycaps as one instanced mesh — 75 draw calls collapsed into one. The
     // per-instance colour attribute is what lets a single cap light up.
-    const columns = 15;
-    const rows = 5;
-    const keySize = 0.023;
-    const gap = 0.0045;
+    const columns = 12;
+    const rows = 4;
+    const keySize = 0.0225;
+    const gap = 0.0035;
     this.keyCount = columns * rows;
 
     this.keycaps = new InstancedMesh(
-      new BoxGeometry(keySize, 0.007, keySize),
-      new MeshStandardMaterial({ color: 0xffffff, roughness: 0.85 }),
+      new BoxGeometry(keySize, 0.008, keySize),
+      new MeshStandardMaterial({ color: 0xffffff, roughness: 0.88 }),
       this.keyCount,
     );
     this.keycaps.castShadow = true;
@@ -169,8 +171,8 @@ export class Peripherals {
     if (this.keycaps.instanceColor) this.keycaps.instanceColor.needsUpdate = true;
     group.add(this.keycaps);
 
-    // Spacebar, across the front row.
-    const spacebar = new Mesh(new BoxGeometry(keySize * 6, 0.007, keySize), this.darkPlastic);
+    // Spacebar, across the front row — beige like everything else here.
+    const spacebar = new Mesh(new BoxGeometry(keySize * 6, 0.008, keySize), this.capPlastic);
     spacebar.position.set(0, 0.012, spanZ / 2 + keySize + gap * 2);
     spacebar.castShadow = true;
     group.add(spacebar);
@@ -186,7 +188,7 @@ export class Peripherals {
       group.add(led);
     }
 
-    group.position.set(-0.02, DESK.top, 0.1);
+    group.position.set(-0.02, DESK.top, 0.14);
     // A couple of degrees of tilt, like feet-up on a real board.
     group.rotation.x = -0.045;
     group.rotation.y = 0.04;
@@ -196,28 +198,32 @@ export class Peripherals {
   private buildMouse() {
     const group = new Group();
 
-    const shell = new Mesh(new SphereGeometry(0.032, 20, 14), this.plastic);
-    shell.scale.set(0.72, 0.5, 1);
+    // A box with one square button on the front, which is all it ever was.
+    const shell = new Mesh(
+      roundedSlab(0.043, 0.062, 0.006, { depth: 0.024, bevel: 0.004 }),
+      this.plastic,
+    );
+    shell.rotation.x = -Math.PI / 2;
+    shell.position.y = 0.012;
     shell.castShadow = true;
     group.add(shell);
 
-    const split = new Mesh(new BoxGeometry(0.0015, 0.004, 0.03), this.darkPlastic);
-    split.position.set(0, 0.0155, -0.016);
-    group.add(split);
-
-    const wheel = new Mesh(new CylinderGeometry(0.005, 0.005, 0.004, 10), this.darkPlastic);
-    wheel.rotation.z = Math.PI / 2;
-    wheel.position.set(0, 0.017, -0.021);
-    group.add(wheel);
+    const button = new Mesh(
+      roundedSlab(0.03, 0.021, 0.003, { depth: 0.004, bevel: 0.001 }),
+      this.capPlastic,
+    );
+    button.rotation.x = -Math.PI / 2;
+    button.position.set(0, 0.0245, -0.016);
+    group.add(button);
 
     // The sensor glow underneath, which brightens as the cursor moves.
     this.mouseLed = new MeshBasicMaterial({ color: 0x1a0d0d });
     const sensor = new Mesh(new PlaneGeometry(0.012, 0.012), this.mouseLed);
     sensor.rotation.x = Math.PI / 2;
-    sensor.position.y = -0.013;
+    sensor.position.y = 0.0005;
     group.add(sensor);
 
-    group.position.set(this.mouseAt.x, DESK.top + 0.014, this.mouseAt.z);
+    group.position.set(this.mouseAt.x, DESK.top + 0.001, this.mouseAt.z);
     group.rotation.y = -0.16;
     this.mouse = group;
     return group;
@@ -298,61 +304,47 @@ export class Peripherals {
     return group;
   }
 
-  private buildSpeakers() {
+  /**
+   * A stack of 3.5" disks and one out of the box, which is what actually sat
+   * beside a Macintosh — there was nowhere else to keep anything.
+   */
+  private buildFloppies() {
     const group = new Group();
 
-    for (const x of [-0.9, 0.86]) {
-      const speaker = new Group();
+    const shell = new MeshStandardMaterial({ color: 0x3f4550, roughness: 0.7 });
+    const shutter = new MeshStandardMaterial({ color: 0xb9bcc2, roughness: 0.35, metalness: 0.7 });
+    const label = new MeshStandardMaterial({ color: 0xe8e2d2, roughness: 0.92 });
 
-      const box = new Mesh(new BoxGeometry(0.085, 0.17, 0.085), this.darkPlastic);
-      box.position.y = 0.085;
-      box.castShadow = true;
-      speaker.add(box);
+    const disk = (y: number, turn: number) => {
+      const one = new Group();
 
-      const cone = new Mesh(new CylinderGeometry(0.028, 0.028, 0.008, 18), this.rubber);
-      cone.rotation.x = Math.PI / 2;
-      cone.position.set(0, 0.105, 0.044);
-      speaker.add(cone);
-      // Tracked so the driver can be pushed in and out with the music.
-      this.cones.push(cone);
+      const body = new Mesh(roundedSlab(0.09, 0.094, 0.004, { depth: 0.0032 }), shell);
+      body.rotation.x = -Math.PI / 2;
+      body.castShadow = true;
+      one.add(body);
 
-      const tweeter = new Mesh(new CylinderGeometry(0.012, 0.012, 0.006, 14), this.rubber);
-      tweeter.rotation.x = Math.PI / 2;
-      tweeter.position.set(0, 0.045, 0.044);
-      speaker.add(tweeter);
+      // The metal shutter along one edge, and the paper label above it.
+      const slide = new Mesh(new BoxGeometry(0.038, 0.0034, 0.016), shutter);
+      slide.position.set(-0.016, 0.0002, -0.037);
+      one.add(slide);
 
-      speaker.position.set(x, DESK.top, -0.34);
-      // Toed in toward the chair.
-      speaker.rotation.y = x < 0 ? 0.42 : -0.42;
-      group.add(speaker);
+      const sticker = new Mesh(new BoxGeometry(0.072, 0.0034, 0.042), label);
+      sticker.position.set(0, 0.0004, 0.018);
+      one.add(sticker);
+
+      one.position.y = y;
+      one.rotation.y = turn;
+      return one;
+    };
+
+    for (let i = 0; i < 4; i += 1) {
+      group.add(disk(i * 0.0038, (Math.random() - 0.5) * 0.12));
     }
+    // One pulled off the top and left lying askew.
+    group.add(disk(0.0165, 0.6));
 
-    return group;
-  }
-
-  private buildHeadphones() {
-    const group = new Group();
-
-    const band = new Mesh(
-      new TorusGeometry(0.062, 0.008, 8, 26, Math.PI * 1.05),
-      this.darkPlastic,
-    );
-    band.rotation.z = -Math.PI / 2;
-    band.rotation.y = 0.3;
-    band.position.y = 0.062;
-    band.castShadow = true;
-    group.add(band);
-
-    for (const side of [-1, 1]) {
-      const cup = new Mesh(new CylinderGeometry(0.032, 0.032, 0.022, 18), this.rubber);
-      cup.rotation.z = Math.PI / 2;
-      cup.position.set(side * 0.058 * Math.cos(0.3), 0.03, side * 0.058 * Math.sin(0.3));
-      cup.castShadow = true;
-      group.add(cup);
-    }
-
-    group.position.set(0.9, DESK.top, 0.14);
-    group.rotation.y = -0.5;
+    group.position.set(-0.33, DESK.top + 0.002, 0.2);
+    group.rotation.y = 0.18;
     return group;
   }
 

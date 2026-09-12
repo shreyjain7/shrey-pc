@@ -123,7 +123,7 @@ export function createSystemMonitor(): HTMLElement {
   const legend = el('div', 'sysmon__legend');
   const rpmReadout = el('span', 'sysmon__rpm', '0 RPM');
   legend.append(rpmReadout);
-  legend.append(el('span', 'sysmon__hint', 'Live from the room · the fans follow real load'));
+  legend.append(el('span', 'sysmon__hint', 'Live from the room · the same scene, drawn a second time'));
   stage.append(legend);
 
   const unmountCam = mountCaseCam(canvas);

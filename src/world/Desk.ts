@@ -1,6 +1,6 @@
 import { BoxGeometry, Group, Mesh, MeshStandardMaterial, Vector3 } from 'three';
 import { cable, roundedSlab } from './geometry';
-import { DESK, MONITOR, TOWER } from './layout';
+import { DESK, MONITOR } from './layout';
 
 /**
  * Warm wooden top on dark steel legs, to push against the cold screen light.
@@ -131,11 +131,12 @@ export class Desk {
         new Vector3(0.12, trayY, backZ),
         0.06,
       ],
-      // Tower: from the back of the case down to the tray.
+      // Keyboard: the coiled lead from the front of the machine, round the
+      // side and down. On a compact Mac this is the only other cable there is.
       [
-        new Vector3(TOWER.position.x + 0.12, DESK.top + 0.06, TOWER.position.z - 0.14),
+        new Vector3(-0.19, DESK.top + 0.03, MONITOR.frontZ + 0.02),
         new Vector3(0.06, trayY, backZ),
-        0.08,
+        0.1,
       ],
       // And one run off the tray to the floor, which is where it all goes.
       [

@@ -3,8 +3,7 @@ import { initAnalytics, track } from '../analytics';
 import { links, profile } from '../data/cv';
 import { OS } from '../os/OS';
 import { registerScene, type RoomView } from '../os/system';
-import { CASE } from '../world/Tower';
-import { TOWER } from '../world/layout';
+import { SCREEN_CENTER } from '../world/layout';
 import { telemetry } from '../world/telemetry';
 import { World } from '../world/World';
 import { Audio } from './Audio';
@@ -70,14 +69,15 @@ export class Experience {
       this.sizes,
       this.mount,
       () => this.enterScreen(),
-      () => this.inspectMachine(),
     );
     this.renderer = new Renderer(canvas, cssTarget, this.scene, this.camera, this.sizes);
 
     this.buildUI();
 
-    // The tower stands on the desk, so its centre is half a case up from it.
-    this.camTarget.set(TOWER.position.x, TOWER.position.y + CASE.height / 2, TOWER.position.z);
+    // With no tower to look into, the case cam orbits the machine itself —
+    // still the same scene, the same lights, the same geometry, just aimed at
+    // the thing the OS is actually running on.
+    this.camTarget.set(SCREEN_CENTER.x, SCREEN_CENTER.y - 0.04, SCREEN_CENTER.z - 0.2);
 
     registerScene({
       caseCam: (canvas) => this.mountCaseCam(canvas),
@@ -191,11 +191,6 @@ export class Experience {
   }
 
   /** Clicking the case takes you to the pose it looks best from. */
-  private inspectMachine() {
-    if (!this.ready) return;
-    this.setView('workstation');
-    track('machine_inspected');
-  }
 
   /**
    * The one place the three views are switched between.
@@ -293,7 +288,7 @@ export class Experience {
   /* ---------------------------------------------------------------------- */
 
   /**
-   * Render the tower into an OS window.
+   * Render the machine into an OS window.
    *
    * A second WebGLRenderer over the *same* scene: the geometry, the materials
    * and the lights are all shared, so what this draws is not a copy of the
@@ -384,12 +379,15 @@ export class Experience {
       camera.updateProjectionMatrix();
     }
 
-    // Keep the orbit on the glass-panel side, and bob just above centre.
-    const radius = 0.64;
-    const swing = Math.sin(this.camAngle) * 0.55 + TOWER.rotationY + Math.PI / 2;
+    // Three-quarter, never straight on: square to the front is a view down
+    // the glass, which is the depth hole and therefore a black rectangle. The
+    // swing stays between about 30 and 70 degrees off the face, where the
+    // case, the chin and the slot all read.
+    const radius = 1.34;
+    const swing = Math.PI * 0.28 + Math.sin(this.camAngle) * 0.35;
     camera.position.set(
       this.camTarget.x + Math.sin(swing) * radius,
-      this.camTarget.y + 0.06 + Math.sin(this.camAngle * 0.7) * 0.05,
+      this.camTarget.y + 0.2 + Math.sin(this.camAngle * 0.7) * 0.05,
       this.camTarget.z + Math.cos(swing) * radius,
     );
     camera.lookAt(this.camTarget);
@@ -457,7 +455,7 @@ export class Experience {
     dot.className = 'hint__dot';
     hint.append(
       dot,
-      document.createTextNode('Tap the monitor to sit down · tap the tower for a closer look'),
+      document.createTextNode('Tap the Macintosh to sit down'),
     );
 
     const social = document.createElement('div');
@@ -481,7 +479,7 @@ export class Experience {
     exit.addEventListener('click', () => this.exitScreen());
 
     // A standing readout of what the machine is doing, visible whenever the
-    // room is. It is the same data the tower's fans are reacting to.
+    // room is.
     const telemetryPanel = document.createElement('div');
     telemetryPanel.className = 'ui-panel ui-panel--room telemetry';
     const rows: Array<[string, HTMLElement]> = [];

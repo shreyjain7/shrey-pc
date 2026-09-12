@@ -73,18 +73,6 @@ export const IDLE_CAMERA = {
 };
 
 /**
- * The external drive, in the place a second floppy or a 20MB disk actually
- * sat: on the desk beside the machine, turned a little toward the room. It
- * carries the telemetry the tower used to — this is still the box whose
- * fan speed and disk light the OS drives.
- */
-export const TOWER = {
-  position: new Vector3(-0.47, DESK.top, -0.1),
-  /** Positive yaw turns its front-left corner toward the resting camera. */
-  rotationY: 0.34,
-};
-
-/**
  * The workstation pose.
  *
  * The OS docks over the right of the viewport here, so this is framed for the

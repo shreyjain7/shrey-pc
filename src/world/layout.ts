@@ -66,6 +66,15 @@ export const SCREEN_PX = {
 
 export const PX_TO_M = MONITOR.screenWidth / SCREEN_PX.width;
 
+/**
+ * Where the opening flight begins: back across the room, higher and swung
+ * round, so the first two seconds travel the whole desk before settling.
+ */
+export const ENTRY_CAMERA = {
+  position: new Vector3(-1.55, 2.05, 2.62),
+  target: new Vector3(-0.1, 0.92, -0.3),
+};
+
 /** Where the camera rests when nothing is focused. */
 export const IDLE_CAMERA = {
   position: new Vector3(0.30, 1.42, 1.34),

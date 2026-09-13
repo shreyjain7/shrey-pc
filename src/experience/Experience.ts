@@ -144,6 +144,9 @@ export class Experience {
     telemetry.setPowered(true);
     this.ready = true;
 
+    // The room arrives rather than simply being there.
+    this.camera.arrive();
+
     track('experience_started', { quality: this.sizes.quality });
   };
 

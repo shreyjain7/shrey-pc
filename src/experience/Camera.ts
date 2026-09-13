@@ -1,6 +1,6 @@
 import { MathUtils, PerspectiveCamera, Spherical, Vector3 } from 'three';
 import type { Sizes } from './Sizes';
-import { IDLE_CAMERA, MONITOR, SCREEN_CENTER, WORKSTATION_CAMERA } from '../world/layout';
+import { ENTRY_CAMERA, IDLE_CAMERA, MONITOR, SCREEN_CENTER, WORKSTATION_CAMERA } from '../world/layout';
 
 const easeInOutCubic = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2);
 
@@ -222,6 +222,29 @@ export class Camera {
     this.mode = mode;
     this.dragging = false;
     this.onSettled = onSettled ?? null;
+  }
+
+  /**
+   * The opening flight.
+   *
+   * Not a mode change — the camera is already idle and `setMode` would refuse
+   * it — so this plants the camera at the establishing pose and restarts the
+   * same ease that every other flight uses. Orbit and parallax keep working
+   * throughout, because the live pose is recomputed every frame rather than
+   * baked at the start.
+   */
+  arrive(duration = 2.8) {
+    this.from.position.copy(ENTRY_CAMERA.position);
+    this.from.target.copy(ENTRY_CAMERA.target);
+    this.instance.position.copy(ENTRY_CAMERA.position);
+    this.lookAt.copy(ENTRY_CAMERA.target);
+    this.instance.lookAt(this.lookAt);
+
+    this.mode = 'idle';
+    this.progress = 0;
+    this.duration = duration;
+    this.dragging = false;
+    this.onSettled = null;
   }
 
   focus(onSettled?: (mode: CameraMode) => void) {

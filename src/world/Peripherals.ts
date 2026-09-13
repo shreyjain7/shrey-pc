@@ -45,6 +45,17 @@ const MOUSE_RANGE = {
 const KEY_BASE = new Color(0x33333a);
 const KEY_LIT = new Color(0x5fd0ff);
 
+/**
+ * The mouth of the floppy slot, matched to where the Macintosh's chin puts it:
+ * low and right of centre, a hair proud of the front face.
+ */
+const SLOT = {
+  x: 0.085,
+  y: DESK.top + MONITOR.chin / 2 - 0.03,
+  /** Inside the chin, not against it — a disk that has gone in is not seen. */
+  z: MONITOR.frontZ - 0.055,
+};
+
 export class Peripherals {
   readonly group = new Group();
   readonly deskLamp: SpotLight;
@@ -54,6 +65,19 @@ export class Peripherals {
   private keyHeat!: Float32Array;
   private keyCount = 0;
   private readonly keyColor = new Color();
+
+  /** The disk off the top of the stack, and where it sits when idle. */
+  private loose: Group | null = null;
+  private looseRest = new Vector3();
+  /**
+   * The slot, expressed in the stack's own space. The disk is a child of a
+   * group that is both moved and turned, so a world position means nothing to
+   * it — this is converted once, at build time, rather than every frame.
+   */
+  private slotLocal = new Vector3();
+  /** 0 on the desk, 1 fully seated in the slot. Eased, never snapped. */
+  private insert = 0;
+  private wasPowered = false;
 
   private mouse!: Group;
   private mouseAt = { x: 0.31, z: 0.1 };
@@ -340,11 +364,19 @@ export class Peripherals {
     for (let i = 0; i < 4; i += 1) {
       group.add(disk(i * 0.0038, (Math.random() - 0.5) * 0.12));
     }
-    // One pulled off the top and left lying askew.
-    group.add(disk(0.0165, 0.6));
+    // One pulled off the top and left lying askew — this is the one that
+    // loads itself when the machine wakes.
+    this.loose = disk(0.0165, 0.6);
+    this.looseRest = this.loose.position.clone();
+    group.add(this.loose);
 
     group.position.set(-0.33, DESK.top + 0.002, 0.2);
     group.rotation.y = 0.18;
+
+    group.updateMatrixWorld();
+    this.slotLocal.set(SLOT.x, SLOT.y, SLOT.z);
+    group.worldToLocal(this.slotLocal);
+
     return group;
   }
 
@@ -483,6 +515,7 @@ export class Peripherals {
 
     this.updateKeyboard(delta, state.keys, state.powered);
     this.updateMouse(delta, state.cursor.x, state.cursor.y, state.powered);
+    this.updateDisk(delta, state.powered);
 
     // Speaker drivers ride the music player's output level.
     for (const cone of this.cones) {
@@ -491,6 +524,42 @@ export class Peripherals {
       const swell = 1 + state.audio * 0.08;
       cone.scale.setScalar(MathUtils.damp(cone.scale.x, swell, 18, delta));
     }
+  }
+
+  /**
+   * The disk loads itself when the machine wakes, and is spat back out when it
+   * sleeps.
+   *
+   * Three eased stages off one 0..1 value, so there is no state machine to get
+   * stuck: it lifts off the desk, tracks across to the slot, then slides in.
+   * Because it is driven from the value rather than from events, a power cycle
+   * mid-flight simply reverses it.
+   */
+  private updateDisk(delta: number, powered: boolean) {
+    if (!this.loose) return;
+
+    // Only start once the machine has actually been woken, not on first paint.
+    if (powered !== this.wasPowered) this.wasPowered = powered;
+
+    this.insert = MathUtils.damp(this.insert, powered ? 1 : 0, 2.6, delta);
+    const t = this.insert;
+    if (t < 0.0015) {
+      this.loose.position.copy(this.looseRest);
+      this.loose.rotation.set(0, 0.6, 0);
+      return;
+    }
+
+    // Lift: up off the stack early, back down as it seats.
+    const lift = Math.sin(Math.min(t, 1) * Math.PI) * 0.055;
+    // Travel: across the desk and into the slot's mouth.
+    const ease = t * t * (3 - 2 * t);
+
+    this.loose.position.lerpVectors(this.looseRest, this.slotLocal, ease);
+    this.loose.position.y += lift;
+
+    // A 3.5" disk goes in flat, label up — it only has to square up with the
+    // slot, which is the Y turn coming off its askew resting angle.
+    this.loose.rotation.set(0, 0.6 * (1 - ease) - 0.18 * ease, 0);
   }
 
   private updateKeyboard(delta: number, impulse: number, powered: boolean) {

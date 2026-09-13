@@ -6,17 +6,8 @@ const easeInOutCubic = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2
 
 export type CameraMode = 'idle' | 'workstation' | 'focused';
 
-/**
- * How far the dolly may travel either side of a pose's authored distance.
- *
- * A phone is allowed much closer. The screen is a 1280px surface projected
- * into a few hundred device pixels there, so the default pose — which now
- * frames the case, not just the glass — leaves the OS too small to read. The
- * deeper floor is what lets a pinch bring it right up to the glass, where the
- * text lands at something like its authored size.
- */
+/** How far the dolly may travel either side of a pose's authored distance. */
 const ZOOM_MIN = 0.52;
-const ZOOM_MIN_COMPACT = 0.3;
 const ZOOM_MAX = 2.4;
 
 /** How far the user may swing the view away from the resting pose. */
@@ -145,15 +136,10 @@ export class Camera {
     // Multiplicative, so a notch feels the same close up as far away.
     this.zoomTarget = MathUtils.clamp(
       this.zoomTarget * Math.exp(event.deltaY * 0.0012),
-      this.zoomFloor,
+      ZOOM_MIN,
       ZOOM_MAX,
     );
   };
-
-  /** How close the dolly may get, which a phone needs more of. */
-  private get zoomFloor() {
-    return this.sizes.compact ? ZOOM_MIN_COMPACT : ZOOM_MIN;
-  }
 
   /** Pinch, measured off whichever two pointers are down. */
   private pinch() {
@@ -173,7 +159,7 @@ export class Camera {
     if (spread > 0) {
       this.zoomTarget = MathUtils.clamp(
         this.zoomTarget * (this.pinchFrom / spread),
-        this.zoomFloor,
+        ZOOM_MIN,
         ZOOM_MAX,
       );
       this.pinchFrom = spread;
@@ -285,10 +271,9 @@ export class Camera {
     // Sitting down no longer means the glass swallowing the frame. The margin
     // leaves the beige around it — the case, the chin, the slot — in shot
     // while the OS is being used, which is the whole point of putting the
-    // thing in a room. A phone gets a tighter one, because it has far fewer
-    // pixels to spend on plastic, but it still shows the machine; pinch
-    // overrides either way.
-    const margin = this.sizes.compact ? 1.16 : 1.46;
+    // thing in a room. A phone has no pixels to spare, so it still fits tight,
+    // and scroll or pinch overrides either way.
+    const margin = this.sizes.compact ? 1.02 : 1.46;
     const fitHeight = (MONITOR.screenHeight * margin) / 2 / Math.tan(vFov / 2);
     const hFov = 2 * Math.atan(Math.tan(vFov / 2) * this.instance.aspect);
     const fitWidth = (MONITOR.screenWidth * margin) / 2 / Math.tan(hFov / 2);

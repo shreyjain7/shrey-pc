@@ -15,7 +15,6 @@ import { Dust } from './Dust';
 import { Monitor } from './Monitor';
 import { Peripherals } from './Peripherals';
 import { Room } from './Room';
-import { useCompactScreen } from './layout';
 
 export interface BuildStep {
   name: string;
@@ -54,10 +53,6 @@ export class World {
   /** The ordered work of building the scene, one named chunk at a time. */
   steps(): BuildStep[] {
     const quality = this.sizes.quality;
-
-    // Settled before anything is built: the monitor bakes the surface scale
-    // into its CSS3D object at construction.
-    useCompactScreen(this.sizes.compact);
 
     return [
       {

@@ -16,7 +16,7 @@ import { CSS3DObject } from 'three/examples/jsm/renderers/CSS3DRenderer.js';
 import type { Quality } from '../experience/Sizes';
 import { contactShadow, roundedSlab, taperAlongZ } from './geometry';
 import { smudgeTexture, vignetteTexture } from './textures';
-import { DESK, MONITOR, pxToM, SCREEN_CENTER, SCREEN_PX, SCREEN_Z } from './layout';
+import { DESK, MONITOR, PX_TO_M, SCREEN_CENTER, SCREEN_PX, SCREEN_Z } from './layout';
 
 const { bodyWidth: W, bodyHeight: H, bodyDepth: D, screenWidth: SW, screenHeight: SH } = MONITOR;
 
@@ -219,7 +219,7 @@ export class Monitor {
 
     const cssObject = new CSS3DObject(screenElement);
     cssObject.position.copy(SCREEN_CENTER);
-    cssObject.scale.setScalar(pxToM());
+    cssObject.scale.setScalar(PX_TO_M);
     this.group.add(cssObject);
 
     /* --- Glass -------------------------------------------------------------- */

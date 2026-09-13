@@ -6,6 +6,10 @@ const easeInOutCubic = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2
 
 export type CameraMode = 'idle' | 'workstation' | 'focused';
 
+/** How far the dolly may travel either side of a pose's authored distance. */
+const ZOOM_MIN = 0.52;
+const ZOOM_MAX = 2.4;
+
 /** How far the user may swing the view away from the resting pose. */
 const AZIMUTH_LIMIT = MathUtils.degToRad(34);
 const POLAR_LIMIT = MathUtils.degToRad(17);
@@ -67,6 +71,17 @@ export class Camera {
   private parallax = { x: 0, y: 0 };
   private parallaxTarget = { x: 0, y: 0 };
 
+  /**
+   * Dolly, as a multiplier on whatever distance the current pose wants. One is
+   * the pose as authored; below one is closer. Smoothed, so a wheel notch
+   * glides rather than jumps.
+   */
+  private zoom = 1;
+  private zoomTarget = 1;
+  /** Live pointers, so two of them can be measured against each other. */
+  private readonly touches = new Map<number, { x: number; y: number }>();
+  private pinchFrom = 0;
+
   private dragging = false;
   private dragPointer: number | null = null;
   private dragLast = { x: 0, y: 0 };
@@ -99,11 +114,58 @@ export class Camera {
     window.addEventListener('pointerup', this.onPointerUp);
     window.addEventListener('pointercancel', this.onPointerUp);
     window.addEventListener('keydown', this.onKeyDown);
+    window.addEventListener('wheel', this.onWheel, { passive: false });
   }
 
   /* ---------------------------------------------------------------------- */
   /* Input                                                                   */
   /* ---------------------------------------------------------------------- */
+
+  /**
+   * Scroll to dolly.
+   *
+   * A wheel over the screen belongs to whatever window is under it — the OS
+   * has its own scrolling — so those are left alone and only the room takes
+   * the gesture.
+   */
+  private onWheel = (event: WheelEvent) => {
+    const target = event.target;
+    if (target instanceof Element && target.closest('.screen')) return;
+
+    event.preventDefault();
+    // Multiplicative, so a notch feels the same close up as far away.
+    this.zoomTarget = MathUtils.clamp(
+      this.zoomTarget * Math.exp(event.deltaY * 0.0012),
+      ZOOM_MIN,
+      ZOOM_MAX,
+    );
+  };
+
+  /** Pinch, measured off whichever two pointers are down. */
+  private pinch() {
+    if (this.touches.size < 2) {
+      this.pinchFrom = 0;
+      return false;
+    }
+
+    const [a, b] = [...this.touches.values()];
+    const spread = Math.hypot(a.x - b.x, a.y - b.y);
+
+    if (!this.pinchFrom) {
+      this.pinchFrom = spread;
+      return true;
+    }
+
+    if (spread > 0) {
+      this.zoomTarget = MathUtils.clamp(
+        this.zoomTarget * (this.pinchFrom / spread),
+        ZOOM_MIN,
+        ZOOM_MAX,
+      );
+      this.pinchFrom = spread;
+    }
+    return true;
+  }
 
   /** Both room poses are draggable; only the glass is locked off. */
   private get orbitable() {
@@ -111,13 +173,21 @@ export class Camera {
   }
 
   private onPointerDown = (event: PointerEvent) => {
-    if (!this.orbitable || event.button !== 0) return;
+    if (event.pointerType === 'touch') {
+      this.touches.set(event.pointerId, { x: event.clientX, y: event.clientY });
+      // A second finger means a pinch, not a swing.
+      if (this.touches.size > 1) this.dragging = false;
+    }
+
+    if (!this.orbitable || event.button !== 0 || this.touches.size > 1) return;
     this.dragging = true;
     this.dragPointer = event.pointerId;
     this.dragLast = { x: event.clientX, y: event.clientY };
   };
 
   private onPointerUp = (event: PointerEvent) => {
+    this.touches.delete(event.pointerId);
+    if (this.touches.size < 2) this.pinchFrom = 0;
     if (this.dragPointer !== event.pointerId) return;
     this.dragging = false;
     this.dragPointer = null;
@@ -126,6 +196,11 @@ export class Camera {
   private onPointerMove = (event: PointerEvent) => {
     this.parallaxTarget.x = (event.clientX / this.sizes.width) * 2 - 1;
     this.parallaxTarget.y = (event.clientY / this.sizes.height) * 2 - 1;
+
+    if (this.touches.has(event.pointerId)) {
+      this.touches.set(event.pointerId, { x: event.clientX, y: event.clientY });
+      if (this.pinch()) return;
+    }
 
     if (!this.dragging || this.dragPointer !== event.pointerId || !this.orbitable) return;
 
@@ -167,10 +242,15 @@ export class Camera {
   /** Swing the view back to the resting pose. */
   resetView() {
     this.orbitTarget = { azimuth: 0, polar: 0 };
+    this.zoomTarget = 1;
   }
 
   get isDefaultView() {
-    return Math.abs(this.orbitTarget.azimuth) < 0.01 && Math.abs(this.orbitTarget.polar) < 0.01;
+    return (
+      Math.abs(this.orbitTarget.azimuth) < 0.01 &&
+      Math.abs(this.orbitTarget.polar) < 0.01 &&
+      Math.abs(this.zoomTarget - 1) < 0.01
+    );
   }
 
   /* ---------------------------------------------------------------------- */
@@ -188,7 +268,12 @@ export class Camera {
     this.instance.updateProjectionMatrix();
 
     const vFov = MathUtils.degToRad(this.instance.fov);
-    const margin = this.sizes.compact ? 1.01 : 1.06;
+    // Sitting down no longer means the glass swallowing the frame. The margin
+    // leaves the beige around it — the case, the chin, the slot — in shot
+    // while the OS is being used, which is the whole point of putting the
+    // thing in a room. A phone has no pixels to spare, so it still fits tight,
+    // and scroll or pinch overrides either way.
+    const margin = this.sizes.compact ? 1.02 : 1.46;
     const fitHeight = (MONITOR.screenHeight * margin) / 2 / Math.tan(vFov / 2);
     const hFov = 2 * Math.atan(Math.tan(vFov / 2) * this.instance.aspect);
     const fitWidth = (MONITOR.screenWidth * margin) / 2 / Math.tan(hFov / 2);
@@ -275,7 +360,13 @@ export class Camera {
    */
   private computeLivePose(elapsed: number) {
     if (this.mode === 'focused') {
-      this.livePosition.copy(this.focusPosition);
+      // Dolly along the screen's own normal, so zooming out at the glass backs
+      // away from it squarely rather than swinging round.
+      this.livePosition.set(
+        SCREEN_CENTER.x,
+        SCREEN_CENTER.y,
+        SCREEN_CENTER.z + (this.focusPosition.z - SCREEN_CENTER.z) * this.zoom,
+      );
       this.liveTarget.copy(SCREEN_CENTER);
       return;
     }
@@ -296,7 +387,7 @@ export class Camera {
       Math.PI / 2 + 0.1,
     );
 
-    this.offset.setFromSphericalCoords(rest.radius, polar, azimuth);
+    this.offset.setFromSphericalCoords(rest.radius * this.zoom, polar, azimuth);
     this.livePosition.copy(anchor).add(this.offset);
     this.liveTarget.copy(anchor);
   }
@@ -307,6 +398,7 @@ export class Camera {
 
     this.orbit.azimuth = MathUtils.damp(this.orbit.azimuth, this.orbitTarget.azimuth, 5, delta);
     this.orbit.polar = MathUtils.damp(this.orbit.polar, this.orbitTarget.polar, 5, delta);
+    this.zoom = MathUtils.damp(this.zoom, this.zoomTarget, 6, delta);
 
     // Parallax stands down while the user is actively dragging.
     const parallaxWeight = this.dragging ? 0 : 1;

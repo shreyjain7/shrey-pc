@@ -264,3 +264,40 @@ export function stickyNoteTexture(color: string): Texture {
   texture.colorSpace = SRGBColorSpace;
   return texture;
 }
+
+
+/**
+ * The light a venetian blind throws: hard bright bars, soft dark gaps, and
+ * both ends faded out so a beam has no visible edge where it stops.
+ *
+ * Used as an alpha map, so the mesh carries the colour and this carries only
+ * the shape.
+ */
+export function blindLightTexture(): Texture {
+  const element = canvas(256, (ctx, size) => {
+    ctx.fillStyle = '#000000';
+    ctx.fillRect(0, 0, size, size);
+
+    // The bars, running across the beam.
+    const bars = 9;
+    const pitch = size / bars;
+    ctx.fillStyle = '#ffffff';
+    for (let i = 0; i < bars; i += 1) {
+      ctx.fillRect(0, i * pitch, size, pitch * 0.52);
+    }
+
+    // Fade both ends, so a beam dissolves rather than stopping at a line.
+    const fade = ctx.createLinearGradient(0, 0, size, 0);
+    fade.addColorStop(0, 'rgba(0,0,0,1)');
+    fade.addColorStop(0.2, 'rgba(0,0,0,0)');
+    fade.addColorStop(0.66, 'rgba(0,0,0,0)');
+    fade.addColorStop(1, 'rgba(0,0,0,1)');
+    ctx.globalCompositeOperation = 'destination-out';
+    ctx.fillStyle = fade;
+    ctx.fillRect(0, 0, size, size);
+  });
+
+  const texture = new CanvasTexture(element);
+  texture.colorSpace = SRGBColorSpace;
+  return texture;
+}

@@ -1,5 +1,7 @@
 import {
+  AdditiveBlending,
   BoxGeometry,
+  DoubleSide,
   Group,
   Mesh,
   MeshBasicMaterial,
@@ -9,7 +11,7 @@ import {
   RectAreaLight,
 } from 'three';
 import type { Quality } from '../experience/Sizes';
-import { posterTexture, rugTexture } from './textures';
+import { blindLightTexture, posterTexture, rugTexture } from './textures';
 
 const WALL_Z = -1.35;
 const WALL_X = 2.2;
@@ -43,6 +45,7 @@ export class Room {
     this.buildShell();
     this.buildRug();
     this.buildWindow();
+    if (quality !== 'low') this.buildSunlight();
     this.buildPosters();
     if (quality !== 'low') this.buildShelf();
   }
@@ -168,6 +171,67 @@ export class Room {
     group.add(daylight);
 
     group.position.set(1.28, 1.72, WALL_Z + 0.03);
+    this.group.add(group);
+  }
+
+  /**
+   * The afternoon, made visible.
+   *
+   * There is no post-processing on this scene — the canvas has to stay
+   * transparent for the screen's depth hole — so the beams are geometry:
+   * additive planes leaning out of the window, striped by the blind and faded
+   * at both ends. They write no depth, so nothing in the room z-fights with
+   * them, and they are drawn last so they lie over whatever they cross.
+   */
+  private buildSunlight() {
+    const group = new Group();
+    const mask = blindLightTexture();
+
+    // Three sheets at slightly different angles: one beam looks like a decal,
+    // three overlapping read as a volume.
+    const sheets = [
+      { width: 2.5, height: 1.5, tilt: -0.34, turn: 0.52, opacity: 0.1, offset: 0 },
+      { width: 2.2, height: 1.2, tilt: -0.42, turn: 0.44, opacity: 0.075, offset: 0.16 },
+      { width: 2.8, height: 1.7, tilt: -0.28, turn: 0.6, opacity: 0.055, offset: -0.18 },
+    ];
+
+    for (const sheet of sheets) {
+      const beam = new Mesh(
+        new PlaneGeometry(sheet.width, sheet.height),
+        new MeshBasicMaterial({
+          color: 0xffe6b8,
+          transparent: true,
+          opacity: sheet.opacity,
+          alphaMap: mask,
+          blending: AdditiveBlending,
+          depthWrite: false,
+          side: DoubleSide,
+        }),
+      );
+      beam.rotation.set(sheet.tilt, sheet.turn, 0.22);
+      beam.position.set(0.4 + sheet.offset, -0.15 + sheet.offset * 0.4, 0.9 + sheet.offset);
+      beam.renderOrder = 20;
+      group.add(beam);
+    }
+
+    // The patch those beams land in, lying on the floor.
+    const pool = new Mesh(
+      new PlaneGeometry(1.5, 1.1),
+      new MeshBasicMaterial({
+        color: 0xffdca6,
+        transparent: true,
+        opacity: 0.12,
+        alphaMap: mask,
+        blending: AdditiveBlending,
+        depthWrite: false,
+      }),
+    );
+    pool.rotation.set(-Math.PI / 2, 0, 0.5);
+    pool.position.set(0.2, -1.68, 1.5);
+    pool.renderOrder = 20;
+    group.add(pool);
+
+    group.position.set(1.28, 1.72, WALL_Z + 0.06);
     this.group.add(group);
   }
 

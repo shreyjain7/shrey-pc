@@ -2,10 +2,15 @@ import {
   BufferGeometry,
   CatmullRomCurve3,
   ExtrudeGeometry,
+  Mesh,
+  MeshBasicMaterial,
+  MultiplyBlending,
+  PlaneGeometry,
   Shape,
   TubeGeometry,
   Vector3,
 } from 'three';
+import { contactShadowTexture } from './textures';
 
 /**
  * A rounded rectangle centred on the origin, for extruding.
@@ -130,4 +135,31 @@ export function cable(
 
   const curve = new CatmullRomCurve3([from.clone(), middle, to.clone()]);
   return new TubeGeometry(curve, segments, radius, 6, false);
+}
+
+
+/**
+ * A contact shadow, ready to lay on a surface.
+ *
+ * Multiplied rather than blended, so it darkens whatever it is over instead of
+ * washing it grey, and it writes no depth so it never fights the thing casting
+ * it. Caller positions it; y should clear the surface by a hair.
+ */
+export function contactShadow(width: number, depth: number, opacity = 0.5) {
+  const mesh = new Mesh(
+    new PlaneGeometry(width, depth),
+    new MeshBasicMaterial({
+      color: 0x000000,
+      transparent: true,
+      opacity,
+      alphaMap: contactShadowTexture(),
+      depthWrite: false,
+      blending: MultiplyBlending,
+      // three.js requires this pairing for multiply, and says so loudly.
+      premultipliedAlpha: true,
+    }),
+  );
+  mesh.rotation.x = -Math.PI / 2;
+  mesh.renderOrder = 1;
+  return mesh;
 }

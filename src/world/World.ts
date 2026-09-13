@@ -29,6 +29,7 @@ export interface BuildStep {
  */
 export class World {
   monitor!: Monitor;
+  private room!: Room;
 
   private peripherals!: Peripherals;
   private dust!: Dust;
@@ -62,7 +63,8 @@ export class World {
           // Warm haze, so distance washes out toward the daylight rather than
           // toward black. A dark fog in a bright room reads as grime.
           this.scene.fog = new FogExp2(0xcbb99c, quality === 'low' ? 0.028 : 0.042);
-          this.scene.add(new Room(quality).group);
+          this.room = new Room(quality);
+          this.scene.add(this.room.group);
         },
       },
       {
@@ -125,6 +127,7 @@ export class World {
 
   update(delta: number, elapsed: number) {
     this.dust?.update(delta, elapsed);
+    this.room?.update(elapsed);
     this.peripherals?.update(delta);
   }
 

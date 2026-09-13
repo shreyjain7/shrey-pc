@@ -19,7 +19,7 @@ import {
   Vector3,
 } from 'three';
 import type { Quality } from '../experience/Sizes';
-import { roundedSlab } from './geometry';
+import { contactShadow, roundedSlab } from './geometry';
 import { telemetry } from './telemetry';
 import { stickyNoteTexture } from './textures';
 import { DESK, MONITOR } from './layout';
@@ -121,9 +121,43 @@ export class Peripherals {
       this.group.add(this.buildFloppies(), this.buildStickyNotes());
     }
 
+    this.group.add(this.buildContactShadows(quality));
+
     const lamp = this.buildLamp();
     this.deskLamp = lamp.light;
     this.group.add(lamp.group);
+  }
+
+  /**
+   * The pools everything on the desk sits in.
+   *
+   * Collected here rather than spread through each builder, because they are
+   * one idea — the desk is one surface, and these all lie on it at the same
+   * height with the same material. Sized a little wider than the thing above
+   * them, since a shadow is never exactly the footprint.
+   */
+  private buildContactShadows(quality: Quality) {
+    const group = new Group();
+    const y = DESK.top + 0.0012;
+
+    // [x, z, width, depth, strength]
+    const pools: Array<[number, number, number, number, number]> = [
+      [-0.02, 0.14, 0.46, 0.24, 0.5], // keyboard
+      [this.mouseAt.x, this.mouseAt.z, 0.11, 0.13, 0.42], // mouse
+      [0.52, -0.02, 0.16, 0.16, 0.45], // mug
+      [0.68, -0.12, 0.3, 0.24, 0.42], // books
+      [0.84, -0.06, 0.14, 0.14, 0.4], // pen cup
+    ];
+
+    if (quality !== 'low') pools.push([-0.33, 0.2, 0.2, 0.2, 0.4]); // floppies
+
+    for (const [x, z, width, depth, strength] of pools) {
+      const pool = contactShadow(width, depth, strength);
+      pool.position.set(x, y, z);
+      group.add(pool);
+    }
+
+    return group;
   }
 
   /* ---------------------------------------------------------------------- */

@@ -301,3 +301,36 @@ export function blindLightTexture(): Texture {
   texture.colorSpace = SRGBColorSpace;
   return texture;
 }
+
+/**
+ * The soft dark pool an object casts where it meets a surface.
+ *
+ * A shadow map catches the big cast shadow across the room but loses the tight
+ * darkening right under a thing, which is most of what tells you it is resting
+ * on the desk rather than hovering a millimetre above it. This is that
+ * darkening, painted: opaque at the centre, gone by the rim.
+ */
+export function contactShadowTexture(): Texture {
+  const element = canvas(128, (ctx, size) => {
+    const gradient = ctx.createRadialGradient(
+      size / 2,
+      size / 2,
+      0,
+      size / 2,
+      size / 2,
+      size / 2,
+    );
+    // Held near full for the first third, so the core reads as contact rather
+    // than as a soft blob with no centre.
+    gradient.addColorStop(0, 'rgba(255,255,255,1)');
+    gradient.addColorStop(0.34, 'rgba(255,255,255,0.82)');
+    gradient.addColorStop(0.68, 'rgba(255,255,255,0.26)');
+    gradient.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, size, size);
+  });
+
+  const texture = new CanvasTexture(element);
+  texture.colorSpace = SRGBColorSpace;
+  return texture;
+}

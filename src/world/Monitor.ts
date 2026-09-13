@@ -14,7 +14,7 @@ import {
 } from 'three';
 import { CSS3DObject } from 'three/examples/jsm/renderers/CSS3DRenderer.js';
 import type { Quality } from '../experience/Sizes';
-import { roundedSlab, taperAlongZ } from './geometry';
+import { contactShadow, roundedSlab, taperAlongZ } from './geometry';
 import { smudgeTexture, vignetteTexture } from './textures';
 import { DESK, MONITOR, PX_TO_M, SCREEN_CENTER, SCREEN_PX, SCREEN_Z } from './layout';
 
@@ -192,6 +192,13 @@ export class Monitor {
         this.group.add(foot);
       }
     }
+
+    // The pool it casts where it meets the desk. A shadow map catches the long
+    // throw across the room but loses this, and this is what stops the case
+    // reading as though it is hovering.
+    const grounded = contactShadow(W * 1.5, D * 1.6, 0.62);
+    grounded.position.set(0, DESK.top + 0.0015, MONITOR.frontZ - D / 2);
+    this.group.add(grounded);
 
     /* --- The hole in the canvas -------------------------------------------- */
     // Depth-only: writes to the depth buffer so the room behind never paints

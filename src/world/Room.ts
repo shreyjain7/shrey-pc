@@ -13,6 +13,9 @@ import {
 import type { Quality } from '../experience/Sizes';
 import { blindLightTexture, posterTexture, rugTexture } from './textures';
 
+/** Resting strengths of the beams, so the drift can breathe around them. */
+const BEAM_OPACITY = [0.1, 0.075, 0.055, 0.12];
+
 const WALL_Z = -1.35;
 const WALL_X = 2.2;
 const CEILING_Y = 2.7;
@@ -23,6 +26,9 @@ const CEILING_Y = 2.7;
  */
 export class Room {
   readonly group = new Group();
+
+  /** The beams, kept so the afternoon can move across the room. */
+  private sunlight: Group | null = null;
 
   /** Warm painted plaster — the colour every office was in 1984. */
   private readonly wall = new MeshStandardMaterial({
@@ -232,7 +238,31 @@ export class Room {
     group.add(pool);
 
     group.position.set(1.28, 1.72, WALL_Z + 0.06);
+    this.sunlight = group;
     this.group.add(group);
+  }
+
+  /**
+   * The afternoon, passing.
+   *
+   * Slow enough that nobody watches it happen and yet the room is never twice
+   * the same: a couple of degrees of swing over a minute or so, with the beams
+   * breathing very slightly out of phase so they do not move as one sheet.
+   * Driven off elapsed time rather than accumulated delta, so a backgrounded
+   * tab picks up where the clock actually is.
+   */
+  update(elapsed: number) {
+    if (!this.sunlight) return;
+
+    this.sunlight.rotation.z = Math.sin(elapsed * 0.035) * 0.07;
+    this.sunlight.position.x = 1.28 + Math.sin(elapsed * 0.021) * 0.1;
+
+    this.sunlight.children.forEach((beam, index) => {
+      const material = (beam as Mesh).material as MeshBasicMaterial;
+      if (!material) return;
+      const base = BEAM_OPACITY[index] ?? 0.08;
+      material.opacity = base * (0.82 + Math.sin(elapsed * 0.09 + index * 1.7) * 0.18);
+    });
   }
 
   private buildPosters() {

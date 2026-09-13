@@ -243,10 +243,11 @@ export class Experience {
 
     this.audio.whoosh();
     this.camera.setMode('focused', () => {
-      // Back on the glass — unless this is a phone, where the glass is too
-      // small to read and the OS stays in its fullscreen overlay.
-      if (this.sizes.compact) this.attachOverlay('phone');
-      else this.detachOverlay();
+      // On the glass, on every device. A phone used to lift the OS into a
+      // flat fullscreen panel, which made it readable and made the machine
+      // disappear — you were looking at a desktop, not at a Macintosh. It
+      // stays projected now, and the camera frames the case around it.
+      this.detachOverlay();
 
       this.os.setInteractive(true);
       this.os.powerOn();

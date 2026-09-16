@@ -1,45 +1,63 @@
 import { BoxGeometry, Group, Mesh, MeshStandardMaterial, Vector3 } from 'three';
-import { cable, roundedSlab } from './geometry';
-import { DESK, MONITOR } from './layout';
+import { cable, contactShadow, roundedSlab } from './geometry';
+import { DESK, MONITOR, UNIT } from './layout';
 
 /**
- * Warm wooden top on dark steel legs, to push against the cold screen light.
+ * A grey steel office desk: dark laminate top, light painted frame, and a
+ * drawer pedestal under the right-hand half.
  *
- * The top is a bevelled slab rather than a box: at this camera distance the
- * lit edge of a chamfer is most of what tells you the thing is wood and not a
- * grey rectangle. The legs are braced and footed for the same reason — the
- * highlights those edges catch are what give the frame its depth.
+ * The silhouette is the whole point of this piece of furniture — a flat dark
+ * plane on pale square legs, with one heavy block hanging off it. So the top
+ * gets a bevel (the lit edge of a chamfer is most of what says "laminate over
+ * board" at this distance), the legs are square-section rather than round, and
+ * the pedestal is inset from the top on every side so its shadow line reads.
  */
 export class Desk {
   readonly group = new Group();
 
-  private readonly wood = new MeshStandardMaterial({
-    color: 0x6b4a30,
-    roughness: 0.62,
-    metalness: 0.04,
+  /** Near-black laminate. Matte, because a gloss top would mirror the studio. */
+  private readonly top = new MeshStandardMaterial({
+    color: 0x35353a,
+    roughness: 0.66,
+    metalness: 0.06,
   });
 
-  /** The underside never catches the lamp, so it reads darker and flatter. */
-  private readonly woodUnder = new MeshStandardMaterial({
-    color: 0x4a3322,
-    roughness: 0.85,
+  /** The underside never catches the key, so it reads darker and flatter. */
+  private readonly topUnder = new MeshStandardMaterial({
+    color: 0x232327,
+    roughness: 0.9,
     metalness: 0,
   });
 
+  /** Painted steel — the pale grey the whole frame and pedestal are in. */
   private readonly steel = new MeshStandardMaterial({
-    color: 0x1b1b21,
-    roughness: 0.42,
-    metalness: 0.7,
+    color: 0xb2b4b8,
+    roughness: 0.52,
+    metalness: 0.32,
+  });
+
+  /** The same paint in shadow, for drawer faces and the recessed panel. */
+  private readonly steelShade = new MeshStandardMaterial({
+    color: 0x9b9da1,
+    roughness: 0.58,
+    metalness: 0.28,
+  });
+
+  private readonly chrome = new MeshStandardMaterial({
+    color: 0x86888c,
+    roughness: 0.3,
+    metalness: 0.85,
   });
 
   private readonly rubber = new MeshStandardMaterial({
-    color: 0x111114,
+    color: 0x1b1b1f,
     roughness: 0.95,
     metalness: 0,
   });
 
   constructor() {
     this.buildTop();
+    this.buildPedestal();
     this.buildLegs();
     this.buildCables();
   }
@@ -47,102 +65,146 @@ export class Desk {
   private buildTop() {
     // roundedSlab extrudes along -Z with its front face on z = 0; laying it
     // flat puts the work surface at y = 0 and the thickness below it.
-    const slab = roundedSlab(DESK.width, DESK.depth, 0.014, {
+    const slab = roundedSlab(DESK.width, DESK.depth, 0.01, {
       depth: DESK.thickness,
-      bevel: 0.005,
+      bevel: 0.004,
     });
     slab.rotateX(-Math.PI / 2);
 
-    const top = new Mesh(slab, this.wood);
+    const top = new Mesh(slab, this.top);
     top.position.set(0, DESK.top, DESK.centreZ);
     top.castShadow = true;
     top.receiveShadow = true;
     this.group.add(top);
 
-    // A darker panel just under the lip, so the edge reads as a thickness
-    // rather than a painted line.
     const lip = new Mesh(
-      new BoxGeometry(DESK.width - 0.02, 0.012, DESK.depth - 0.02),
-      this.woodUnder,
+      new BoxGeometry(DESK.width - 0.016, 0.01, DESK.depth - 0.016),
+      this.topUnder,
     );
-    lip.position.set(0, DESK.top - DESK.thickness - 0.005, DESK.centreZ);
+    lip.position.set(0, DESK.top - DESK.thickness - 0.004, DESK.centreZ);
     this.group.add(lip);
+  }
+
+  /**
+   * The drawer block under the right half: two drawers, each with a pressed
+   * handle recess, standing clear of the floor on a plinth.
+   */
+  private buildPedestal() {
+    const width = 0.42;
+    const depth = DESK.depth - 0.09;
+    const height = DESK.top - DESK.thickness - 0.075;
+    const x = DESK.width / 2 - width / 2 - 0.19;
+    const z = DESK.centreZ - 0.012;
+    const frontZ = z + depth / 2;
+
+    const box = new Mesh(new BoxGeometry(width, height, depth), this.steel);
+    box.position.set(x, height / 2 + 0.075, z);
+    box.castShadow = true;
+    box.receiveShadow = true;
+    this.group.add(box);
+
+    // Two drawer faces, proud of the carcass by a millimetre so the gap
+    // between them catches a line of shadow.
+    const faceHeight = height * 0.42;
+    for (let i = 0; i < 2; i += 1) {
+      const centreY = 0.075 + height - faceHeight / 2 - 0.012 - i * (faceHeight + 0.014);
+
+      const face = new Mesh(
+        roundedSlab(width - 0.02, faceHeight, 0.006, { depth: 0.012, bevel: 0.002 }),
+        this.steelShade,
+      );
+      face.position.set(x, centreY, frontZ + 0.006);
+      this.group.add(face);
+
+      // The pressed pull: a shallow dark slot rather than a knob.
+      const pull = new Mesh(new BoxGeometry(0.1, 0.014, 0.008), this.chrome);
+      pull.position.set(x + 0.09, centreY, frontZ + 0.012);
+      this.group.add(pull);
+    }
+
+    // Plinth, set back all round so the block appears to float a little.
+    const plinth = new Mesh(
+      new BoxGeometry(width - 0.05, 0.075, depth - 0.05),
+      this.rubber,
+    );
+    plinth.position.set(x, 0.0375, z);
+    this.group.add(plinth);
+
+    const pool = contactShadow(width + 0.24, depth + 0.24, 0.32);
+    pool.position.set(x, 0.002, z);
+    this.group.add(pool);
   }
 
   private buildLegs() {
     const legHeight = DESK.top - DESK.thickness;
-    const insetX = DESK.width / 2 - 0.08;
-    const insetZ = DESK.depth / 2 - 0.08;
+    const insetZ = DESK.depth / 2 - 0.075;
     const centreZ = DESK.centreZ;
 
-    // Slightly tapered box legs: wider at the top than the floor.
-    const legGeometry = roundedSlab(0.05, legHeight, 0.008, {
-      depth: 0.05,
-      bevel: 0.004,
+    // Only the left half stands on legs — the pedestal carries the right.
+    const legXs = [-DESK.width / 2 + 0.07, DESK.width / 2 - 0.07];
+
+    const legGeometry = roundedSlab(0.046, legHeight, 0.006, {
+      depth: 0.046,
+      bevel: 0.003,
     });
 
-    for (const x of [-insetX, insetX]) {
+    for (const x of legXs) {
       for (const z of [centreZ - insetZ, centreZ + insetZ]) {
         const leg = new Mesh(legGeometry, this.steel);
-        leg.position.set(x, legHeight / 2, z + 0.025);
+        leg.position.set(x, legHeight / 2, z + 0.023);
         leg.castShadow = true;
         this.group.add(leg);
 
-        const foot = new Mesh(new BoxGeometry(0.058, 0.01, 0.058), this.rubber);
-        foot.position.set(x, 0.005, z);
+        const foot = new Mesh(new BoxGeometry(0.052, 0.008, 0.052), this.rubber);
+        foot.position.set(x, 0.004, z);
         this.group.add(foot);
+
+        const pool = contactShadow(0.16, 0.16, 0.3);
+        pool.position.set(x, 0.002, z);
+        this.group.add(pool);
       }
     }
 
-    // A brace across each end, and one along the back: this is what stops the
-    // legs reading as four unrelated posts.
-    const braceGeometry = new BoxGeometry(0.03, 0.03, insetZ * 2);
-    for (const x of [-insetX, insetX]) {
-      const brace = new Mesh(braceGeometry, this.steel);
-      brace.position.set(x, 0.1, centreZ);
-      brace.castShadow = true;
-      this.group.add(brace);
-    }
+    // The modesty panel across the left bay, recessed behind the front edge.
+    const panel = new Mesh(new BoxGeometry(0.72, legHeight - 0.16, 0.016), this.steelShade);
+    panel.position.set(-DESK.width / 2 + 0.44, (legHeight - 0.16) / 2 + 0.1, centreZ - 0.14);
+    panel.castShadow = true;
+    this.group.add(panel);
 
-    const spine = new Mesh(new BoxGeometry(insetX * 2, 0.026, 0.026), this.steel);
-    spine.position.set(0, 0.1, centreZ - insetZ);
-    spine.castShadow = true;
-    this.group.add(spine);
-
-    // Cable tray slung under the back edge.
-    const tray = new Mesh(new BoxGeometry(0.62, 0.016, 0.09), this.steel);
-    tray.position.set(0.1, DESK.top - DESK.thickness - 0.08, centreZ - insetZ + 0.04);
-    this.group.add(tray);
+    // A brace tying the two left legs front to back.
+    const brace = new Mesh(new BoxGeometry(0.026, 0.026, insetZ * 2), this.steel);
+    brace.position.set(legXs[0], 0.1, centreZ);
+    brace.castShadow = true;
+    this.group.add(brace);
   }
 
   /**
-   * Cables from the monitor and the tower, drooping behind the desk and down
-   * to the floor. Without them everything on the desk reads as unplugged
-   * props sitting near each other.
+   * The runs out of the back of the machine and over the desk's rear edge.
+   * Without them everything up there reads as unplugged props sitting near
+   * each other.
    */
   private buildCables() {
-    const backZ = DESK.centreZ - DESK.depth / 2 + 0.06;
-    const trayY = DESK.top - DESK.thickness - 0.07;
+    const backZ = DESK.centreZ - DESK.depth / 2 + 0.04;
+    const floorY = 0.012;
 
     const runs: Array<[Vector3, Vector3, number]> = [
-      // Monitor: out of the back of the stand, over the edge, into the tray.
+      // Monitor signal lead, out of the tube's neck and down behind the desk.
       [
-        new Vector3(0.02, DESK.top + 0.01, MONITOR.frontZ - 0.2),
-        new Vector3(0.12, trayY, backZ),
-        0.06,
+        new Vector3(0.03, DESK.top + UNIT.height + 0.02, MONITOR.frontZ - MONITOR.bodyDepth),
+        new Vector3(0.14, DESK.top - 0.12, backZ),
+        0.07,
       ],
-      // Keyboard: the coiled lead from the front of the machine, round the
-      // side and down. On a compact Mac this is the only other cable there is.
+      // Mains, off the back of the system unit.
       [
-        new Vector3(-0.19, DESK.top + 0.03, MONITOR.frontZ + 0.02),
-        new Vector3(0.06, trayY, backZ),
-        0.1,
+        new Vector3(-0.14, DESK.top + 0.03, UNIT.frontZ - UNIT.depth),
+        new Vector3(0.05, DESK.top - 0.14, backZ),
+        0.09,
       ],
-      // And one run off the tray to the floor, which is where it all goes.
+      // And the run off the desk to the floor, which is where it all goes.
       [
-        new Vector3(0.1, trayY, backZ),
-        new Vector3(0.34, 0.012, backZ - 0.22),
-        0.14,
+        new Vector3(0.1, DESK.top - 0.13, backZ),
+        new Vector3(0.36, floorY, backZ - 0.24),
+        0.16,
       ],
     ];
 

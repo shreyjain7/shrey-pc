@@ -18,7 +18,7 @@ Never push to a different repository on a bare "push".
 src/
   main.ts               entry
   experience/           camera, loader, the page-level chrome
-  world/                the room, desk, tower, telemetry bus
+  world/                the studio, desk, machine, chair, telemetry bus
   os/                   the desktop environment
     OS.ts               shell: menu bar, dock, boot/shutdown, start menu
     WindowManager.ts    windows, dragging, resizing, snapping

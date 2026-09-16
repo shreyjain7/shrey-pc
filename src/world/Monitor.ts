@@ -14,30 +14,39 @@ import {
 } from 'three';
 import { CSS3DObject } from 'three/examples/jsm/renderers/CSS3DRenderer.js';
 import type { Quality } from '../experience/Sizes';
-import { contactShadow, roundedSlab, taperAlongZ } from './geometry';
+import { roundedSlab, taperAlongZ } from './geometry';
 import { smudgeTexture, vignetteTexture } from './textures';
-import { DESK, MONITOR, PX_TO_M, SCREEN_CENTER, SCREEN_PX, SCREEN_Z } from './layout';
+import {
+  MONITOR,
+  MONITOR_BOTTOM,
+  PX_TO_M,
+  SCREEN_CENTER,
+  SCREEN_PX,
+  SCREEN_Z,
+  UNIT_TOP,
+} from './layout';
 
 const { bodyWidth: W, bodyHeight: H, bodyDepth: D, screenWidth: SW, screenHeight: SH } = MONITOR;
 
 /** The recessed well the glass sits in, a touch proud of the picture itself. */
-const WELL_W = SW + 0.028;
-const WELL_H = SH + 0.028;
-const WELL_DEPTH = 0.018;
+const WELL_W = SW + 0.026;
+const WELL_H = SH + 0.026;
+const WELL_DEPTH = 0.016;
 
-/** Thickness of the front panel the well is cut into. */
-const FACE_DEPTH = 0.05;
+/** Thickness of the bezel the well is cut into. */
+const FACE_DEPTH = 0.045;
 
-/** Centre of the case, measured up from the desk it stands on. */
-const BODY_CENTRE_Y = DESK.top + H / 2;
+/** Centre of the bezel, measured up from the system unit's lid. */
+const BODY_CENTRE_Y = MONITOR_BOTTOM + H / 2;
 
 /**
- * The compact Macintosh: case, glass, and the live OS projected onto it.
+ * The CRT: bezel, tube, tilt base, glass, and the live OS projected onto it.
  *
- * The all-in-one is one piece of beige plastic — no stand, no neck, no
- * separate monitor — so the silhouette has to do the work: a vertical front
- * face, sides that draw in toward the back, a deep chin carrying the floppy
- * slot, and the handle recess cut into the top.
+ * What makes a monitor of this period read is the depth behind the picture.
+ * The bezel is a flat slab, but the body funnels hard as it goes back — a real
+ * tube is a cone ending in a neck, and squeezing the box along Z is what gives
+ * the silhouette that taper instead of leaving it a shoebox. The pedestal
+ * underneath is the tilt-swivel foot the whole thing rocks on.
  *
  * Everything about the glass is unchanged from the CRT this replaces, because
  * it is what makes the machine usable: a depth-only plane punches a hole in
@@ -52,22 +61,22 @@ export class Monitor {
 
   private readonly screenLight: RectAreaLight;
 
-  /** Platinum beige. Warmer and lighter than the grey CRT it replaces. */
+  /** Platinum beige. The same plastic as the system unit under it. */
   private readonly plastic = new MeshStandardMaterial({
-    color: 0xd8d0be,
-    roughness: 0.78,
+    color: 0xd9d1bf,
+    roughness: 0.76,
     metalness: 0.01,
   });
 
   /** The same beige in shadow, for the recesses cut into it. */
   private readonly shade = new MeshStandardMaterial({
-    color: 0xb3aa97,
+    color: 0xb6ad99,
     roughness: 0.84,
     metalness: 0.01,
   });
 
   private readonly darkPlastic = new MeshStandardMaterial({
-    color: 0x37342e,
+    color: 0x35322c,
     roughness: 0.62,
     metalness: 0.04,
   });
@@ -75,19 +84,19 @@ export class Monitor {
   constructor(screenElement: HTMLElement, quality: Quality) {
     const screenY = SCREEN_CENTER.y;
 
-    /* --- Front face: the panel the screen well is cut into ---------------- */
+    /* --- Bezel: the panel the screen well is cut into ---------------------- */
 
-    // The well is cut where the glass is, which is above the case's centre
-    // because the chin is so much deeper than the brow.
+    // The well is cut where the glass is, which is above the bezel's centre
+    // because the chin carrying the controls is deeper than the brow.
     const wellLift = screenY - BODY_CENTRE_Y;
 
     const face = new Mesh(
-      roundedSlab(W, H, 0.03, {
+      roundedSlab(W, H, 0.022, {
         depth: FACE_DEPTH,
-        bevel: 0.008,
+        bevel: 0.007,
         holeWidth: WELL_W,
         holeHeight: WELL_H,
-        holeRadius: 0.018,
+        holeRadius: 0.016,
         holeOffsetY: wellLift,
       }),
       this.plastic,
@@ -98,17 +107,17 @@ export class Monitor {
     this.group.add(face);
     this.hitboxes.push(face);
 
-    /* --- The well itself, and its floor ----------------------------------- */
+    /* --- The well itself --------------------------------------------------- */
 
-    // Walls: a shallow open box behind the cut-out, so the glass reads as
-    // sunk into the plastic rather than stuck onto it.
+    // A shallow open box behind the cut-out, so the glass reads as sunk into
+    // the plastic rather than stuck onto it.
     const well = new Mesh(
-      roundedSlab(WELL_W, WELL_H, 0.018, {
+      roundedSlab(WELL_W, WELL_H, 0.016, {
         depth: WELL_DEPTH,
         bevel: 0.002,
         holeWidth: SW,
         holeHeight: SH,
-        holeRadius: 0.01,
+        holeRadius: 0.009,
       }),
       this.shade,
     );
@@ -116,89 +125,94 @@ export class Monitor {
     this.group.add(well);
     this.hitboxes.push(well);
 
-    /* --- Body: tapering back, the way the case draws in ------------------- */
+    /* --- The tube: a funnel, not a box ------------------------------------- */
 
-    const bodyDepth = D - FACE_DEPTH;
-    const body = new Mesh(
+    const tubeDepth = D - FACE_DEPTH;
+    const tube = new Mesh(
       taperAlongZ(
-        roundedSlab(W - 0.01, H - 0.01, 0.035, { depth: bodyDepth, bevel: 0.01 }),
-        0.82,
-        bodyDepth,
+        roundedSlab(W - 0.012, H - 0.012, 0.03, { depth: tubeDepth, bevel: 0.008 }),
+        0.56,
+        tubeDepth,
       ),
       this.plastic,
     );
-    body.position.set(0, BODY_CENTRE_Y, MONITOR.frontZ - FACE_DEPTH);
-    body.castShadow = true;
-    body.receiveShadow = true;
-    this.group.add(body);
-    this.hitboxes.push(body);
+    tube.position.set(0, BODY_CENTRE_Y, MONITOR.frontZ - FACE_DEPTH);
+    tube.castShadow = true;
+    tube.receiveShadow = true;
+    this.group.add(tube);
+    this.hitboxes.push(tube);
 
-    /* --- The chin: floppy slot and badge ---------------------------------- */
+    // The neck, and the cap over the yoke at the very back.
+    const neck = new Mesh(
+      new CylinderGeometry(0.036, 0.03, 0.05, quality === 'low' ? 8 : 16),
+      this.shade,
+    );
+    neck.rotation.x = Math.PI / 2;
+    neck.position.set(0, BODY_CENTRE_Y, MONITOR.frontZ - D - 0.02);
+    this.group.add(neck);
 
-    const chinCentreY = DESK.top + MONITOR.chin / 2;
+    /* --- Chin: controls and the power lamp --------------------------------- */
 
-    // The slot sits low and right, as it does on the real case.
-    const slot = new Mesh(new BoxGeometry(0.17, 0.011, 0.012), this.darkPlastic);
-    slot.position.set(0.085, chinCentreY - 0.03, MONITOR.frontZ + 0.004);
-    this.group.add(slot);
+    const chinCentreY = MONITOR_BOTTOM + MONITOR.chin / 2;
+    const faceZ = MONITOR.frontZ + 0.003;
 
-    // The eject notch under one end of it.
-    const notch = new Mesh(new BoxGeometry(0.014, 0.005, 0.01), this.shade);
-    notch.position.set(0.085 + 0.17 / 2 - 0.012, chinCentreY - 0.046, MONITOR.frontZ + 0.004);
-    this.group.add(notch);
+    // A row of small square buttons, left of centre.
+    for (let i = 0; i < 4; i += 1) {
+      const button = new Mesh(new BoxGeometry(0.014, 0.008, 0.003), this.shade);
+      button.position.set(-0.13 + i * 0.019, chinCentreY - 0.012, faceZ);
+      this.group.add(button);
+    }
 
-    // A name plate rather than anybody's logo.
-    const badge = new Mesh(new BoxGeometry(0.052, 0.013, 0.003), this.shade);
-    badge.position.set(-0.145, chinCentreY + 0.042, MONITOR.frontZ + 0.003);
+    // Two thumbwheels — brightness and contrast — on the right.
+    for (const x of [0.15, 0.185]) {
+      const wheel = new Mesh(
+        new CylinderGeometry(0.009, 0.009, 0.006, 12),
+        this.shade,
+      );
+      wheel.rotation.z = Math.PI / 2;
+      wheel.position.set(x, chinCentreY - 0.012, faceZ);
+      this.group.add(wheel);
+    }
+
+    // A plain name plate rather than anybody's logo.
+    const badge = new Mesh(new BoxGeometry(0.05, 0.008, 0.002), this.shade);
+    badge.position.set(-0.02, chinCentreY + 0.014, MONITOR.frontZ + 0.002);
     this.group.add(badge);
 
     this.powerLed = new Mesh(
-      new CylinderGeometry(0.005, 0.005, 0.004, 12),
-      new MeshBasicMaterial({ color: 0x2a2a2a }),
+      new CylinderGeometry(0.0045, 0.0045, 0.004, 12),
+      new MeshBasicMaterial({ color: 0x24261f }),
     );
     this.powerLed.rotation.x = Math.PI / 2;
-    this.powerLed.position.set(-0.205, chinCentreY - 0.03, MONITOR.frontZ + 0.003);
+    this.powerLed.position.set(0.045, chinCentreY - 0.012, faceZ);
     this.group.add(this.powerLed);
 
-    /* --- The top: handle recess and vents --------------------------------- */
+    /* --- Tilt-swivel base --------------------------------------------------- */
 
-    // A rounded trough sunk into the top, behind the brow — the carry handle.
-    const handle = new Mesh(
-      new BoxGeometry(0.15, 0.022, 0.055),
-      this.shade,
+    // A rounded pedestal under the bezel, narrower than the case, with a lip
+    // that reads as the ring the whole monitor rocks on.
+    const base = new Mesh(
+      taperAlongZ(
+        roundedSlab(W - 0.11, MONITOR.baseHeight, 0.018, {
+          depth: D * 0.62,
+          bevel: 0.005,
+        }),
+        0.86,
+        D * 0.62,
+      ),
+      this.plastic,
     );
-    handle.position.set(0, DESK.top + H - 0.011, MONITOR.frontZ - D * 0.55);
-    this.group.add(handle);
+    base.position.set(0, UNIT_TOP + MONITOR.baseHeight / 2, MONITOR.frontZ - 0.03);
+    base.castShadow = true;
+    this.group.add(base);
+    this.hitboxes.push(base);
 
-    if (quality !== 'low') {
-      // Cooling slots across the back of the top, which a fanless case needs.
-      for (let i = 0; i < 7; i += 1) {
-        const vent = new Mesh(new BoxGeometry(0.2, 0.004, 0.009), this.shade);
-        vent.position.set(
-          0,
-          DESK.top + H - 0.002,
-          MONITOR.frontZ - D * 0.66 - i * 0.016,
-        );
-        this.group.add(vent);
-      }
-    }
-
-    /* --- Feet -------------------------------------------------------------- */
-
-    for (const x of [-W / 2 + 0.055, W / 2 - 0.055]) {
-      for (const z of [MONITOR.frontZ - 0.05, MONITOR.frontZ - D + 0.07]) {
-        const foot = new Mesh(new BoxGeometry(0.03, 0.006, 0.03), this.darkPlastic);
-        foot.position.set(x, DESK.top + 0.003, z);
-        this.group.add(foot);
-      }
-    }
-
-    // The pool it casts where it meets the desk. A shadow map catches the long
-    // throw across the room but loses this, and this is what stops the case
-    // reading as though it is hovering.
-    const grounded = contactShadow(W * 1.5, D * 1.6, 0.62);
-    grounded.position.set(0, DESK.top + 0.0015, MONITOR.frontZ - D / 2);
-    this.group.add(grounded);
+    const ring = new Mesh(
+      new CylinderGeometry(0.075, 0.082, 0.008, quality === 'low' ? 12 : 24),
+      this.darkPlastic,
+    );
+    ring.position.set(0, UNIT_TOP + 0.004, MONITOR.frontZ - D * 0.32);
+    this.group.add(ring);
 
     /* --- The hole in the canvas -------------------------------------------- */
     // Depth-only: writes to the depth buffer so the room behind never paints
@@ -246,7 +260,7 @@ export class Monitor {
       new MeshBasicMaterial({
         color: 0x000000,
         transparent: true,
-        opacity: 0.4,
+        opacity: 0.36,
         alphaMap: vignetteTexture(),
         depthWrite: false,
       }),
@@ -281,7 +295,7 @@ export class Monitor {
 
   /** Called by the OS when the machine powers on or off. */
   setPowered(on: boolean) {
-    (this.powerLed.material as MeshBasicMaterial).color.set(on ? 0x7be08f : 0x2a2a2a);
+    (this.powerLed.material as MeshBasicMaterial).color.set(on ? 0x7be08f : 0x24261f);
   }
 
   /** Screen spill tracks how bright the OS actually is right now. */

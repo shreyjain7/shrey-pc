@@ -84,224 +84,6 @@ export function vignetteTexture(): Texture {
   return texture;
 }
 
-/** Brushed-plastic speckle for the monitor and keyboard shells. */
-export function plasticTexture(): Texture {
-  const element = canvas(256, (ctx, size) => {
-    ctx.fillStyle = '#808080';
-    ctx.fillRect(0, 0, size, size);
-    for (let i = 0; i < 24000; i += 1) {
-      const shade = 118 + Math.random() * 24;
-      ctx.fillStyle = `rgb(${shade},${shade},${shade})`;
-      ctx.fillRect(Math.random() * size, Math.random() * size, 1, 1);
-    }
-  });
-
-  const texture = new CanvasTexture(element);
-  texture.wrapS = texture.wrapT = RepeatWrapping;
-  texture.repeat.set(3, 3);
-  return texture;
-}
-
-/** Straight-grained wood for the desk top. */
-export function woodTexture(): Texture {
-  const element = canvas(512, (ctx, size) => {
-    ctx.fillStyle = '#6b4a30';
-    ctx.fillRect(0, 0, size, size);
-
-    for (let i = 0; i < 150; i += 1) {
-      const y = Math.random() * size;
-      const shade = Math.random() > 0.5 ? 255 : 0;
-      ctx.strokeStyle = `rgba(${shade},${shade * 0.7},${shade * 0.4},${0.02 + Math.random() * 0.05})`;
-      ctx.lineWidth = 0.6 + Math.random() * 3.2;
-      ctx.beginPath();
-      ctx.moveTo(0, y);
-      // Gentle waver so the grain is not perfectly straight.
-      for (let x = 0; x <= size; x += 32) {
-        ctx.lineTo(x, y + Math.sin(x * 0.02 + i) * 2.5);
-      }
-      ctx.stroke();
-    }
-
-    // A couple of knots.
-    for (let i = 0; i < 3; i += 1) {
-      const x = Math.random() * size;
-      const y = Math.random() * size;
-      for (let r = 3; r < 22; r += 3) {
-        ctx.strokeStyle = `rgba(40,22,10,${0.16 - r * 0.005})`;
-        ctx.lineWidth = 1.6;
-        ctx.beginPath();
-        ctx.ellipse(x, y, r, r * 0.6, 0.5, 0, Math.PI * 2);
-        ctx.stroke();
-      }
-    }
-  });
-
-  const texture = new CanvasTexture(element);
-  texture.colorSpace = SRGBColorSpace;
-  texture.wrapS = texture.wrapT = RepeatWrapping;
-  return texture;
-}
-
-/** Flat-weave carpet for the rug under the desk. */
-export function rugTexture(): Texture {
-  const element = canvas(256, (ctx, size) => {
-    ctx.fillStyle = '#2c2f3d';
-    ctx.fillRect(0, 0, size, size);
-
-    for (let i = 0; i < 9000; i += 1) {
-      ctx.fillStyle = `rgba(255,255,255,${Math.random() * 0.05})`;
-      ctx.fillRect(Math.random() * size, Math.random() * size, 2, 1);
-    }
-
-    // Border stripes.
-    ctx.strokeStyle = 'rgba(190,150,110,0.5)';
-    ctx.lineWidth = 5;
-    ctx.strokeRect(16, 16, size - 32, size - 32);
-    ctx.strokeStyle = 'rgba(190,150,110,0.25)';
-    ctx.lineWidth = 2;
-    ctx.strokeRect(28, 28, size - 56, size - 56);
-  });
-
-  const texture = new CanvasTexture(element);
-  texture.colorSpace = SRGBColorSpace;
-  return texture;
-}
-
-interface PosterOptions {
-  background: string;
-  ink: string;
-  accent: string;
-  title: string;
-  subtitle: string;
-  /** 'grid' | 'orbit' | 'bars' — the abstract graphic filling the poster. */
-  motif: 'grid' | 'orbit' | 'bars';
-}
-
-/** Framed prints for the wall, so it is not a blank plane behind the desk. */
-export function posterTexture(options: PosterOptions): Texture {
-  const element = canvas(512, (ctx, size) => {
-    ctx.fillStyle = options.background;
-    ctx.fillRect(0, 0, size, size);
-
-    ctx.save();
-    ctx.translate(size / 2, size * 0.44);
-
-    if (options.motif === 'grid') {
-      ctx.strokeStyle = options.accent;
-      ctx.lineWidth = 2;
-      // A perspective grid receding to a horizon.
-      for (let i = -6; i <= 6; i += 1) {
-        ctx.beginPath();
-        ctx.moveTo(i * 26, 120);
-        ctx.lineTo(i * 7, -60);
-        ctx.stroke();
-      }
-      for (let i = 0; i < 8; i += 1) {
-        const y = -60 + i * i * 3.6;
-        ctx.globalAlpha = 1 - i / 9;
-        ctx.beginPath();
-        ctx.moveTo(-170, y);
-        ctx.lineTo(170, y);
-        ctx.stroke();
-      }
-      ctx.globalAlpha = 1;
-    } else if (options.motif === 'orbit') {
-      ctx.strokeStyle = options.accent;
-      ctx.lineWidth = 2.5;
-      for (let i = 1; i <= 4; i += 1) {
-        ctx.beginPath();
-        ctx.ellipse(0, 0, i * 34, i * 34 * 0.42, i * 0.5, 0, Math.PI * 2);
-        ctx.stroke();
-      }
-      ctx.fillStyle = options.accent;
-      ctx.beginPath();
-      ctx.arc(0, 0, 17, 0, Math.PI * 2);
-      ctx.fill();
-    } else {
-      ctx.fillStyle = options.accent;
-      const heights = [40, 96, 62, 140, 84, 116, 54];
-      heights.forEach((height, index) => {
-        ctx.globalAlpha = 0.45 + (index % 3) * 0.22;
-        ctx.fillRect(-160 + index * 46, 110 - height, 30, height);
-      });
-      ctx.globalAlpha = 1;
-    }
-
-    ctx.restore();
-
-    ctx.fillStyle = options.ink;
-    ctx.textAlign = 'center';
-    ctx.font = '600 34px "Segoe UI", system-ui, sans-serif';
-    ctx.fillText(options.title, size / 2, size * 0.79);
-    ctx.font = '400 18px "Segoe UI", system-ui, sans-serif';
-    ctx.globalAlpha = 0.65;
-    ctx.fillText(options.subtitle, size / 2, size * 0.85);
-  });
-
-  const texture = new CanvasTexture(element);
-  texture.colorSpace = SRGBColorSpace;
-  return texture;
-}
-
-/** Handwriting-ish scribbles for the sticky notes. */
-export function stickyNoteTexture(color: string): Texture {
-  const element = canvas(128, (ctx, size) => {
-    ctx.fillStyle = color;
-    ctx.fillRect(0, 0, size, size);
-    ctx.strokeStyle = 'rgba(60,50,30,0.45)';
-    ctx.lineWidth = 2.2;
-    for (let i = 0; i < 5; i += 1) {
-      const y = 26 + i * 18;
-      ctx.beginPath();
-      ctx.moveTo(16, y);
-      // Ragged right edge so it reads as writing, not ruled lines.
-      ctx.lineTo(16 + 40 + Math.random() * 55, y + (Math.random() - 0.5) * 3);
-      ctx.stroke();
-    }
-  });
-
-  const texture = new CanvasTexture(element);
-  texture.colorSpace = SRGBColorSpace;
-  return texture;
-}
-
-
-/**
- * The light a venetian blind throws: hard bright bars, soft dark gaps, and
- * both ends faded out so a beam has no visible edge where it stops.
- *
- * Used as an alpha map, so the mesh carries the colour and this carries only
- * the shape.
- */
-export function blindLightTexture(): Texture {
-  const element = canvas(256, (ctx, size) => {
-    ctx.fillStyle = '#000000';
-    ctx.fillRect(0, 0, size, size);
-
-    // The bars, running across the beam.
-    const bars = 9;
-    const pitch = size / bars;
-    ctx.fillStyle = '#ffffff';
-    for (let i = 0; i < bars; i += 1) {
-      ctx.fillRect(0, i * pitch, size, pitch * 0.52);
-    }
-
-    // Fade both ends, so a beam dissolves rather than stopping at a line.
-    const fade = ctx.createLinearGradient(0, 0, size, 0);
-    fade.addColorStop(0, 'rgba(0,0,0,1)');
-    fade.addColorStop(0.2, 'rgba(0,0,0,0)');
-    fade.addColorStop(0.66, 'rgba(0,0,0,0)');
-    fade.addColorStop(1, 'rgba(0,0,0,1)');
-    ctx.globalCompositeOperation = 'destination-out';
-    ctx.fillStyle = fade;
-    ctx.fillRect(0, 0, size, size);
-  });
-
-  const texture = new CanvasTexture(element);
-  texture.colorSpace = SRGBColorSpace;
-  return texture;
-}
-
 /**
  * The soft dark pool an object casts where it meets a surface.
  *
@@ -326,6 +108,182 @@ export function contactShadowTexture(): Texture {
     gradient.addColorStop(0.34, 'rgba(255,255,255,0.82)');
     gradient.addColorStop(0.68, 'rgba(255,255,255,0.26)');
     gradient.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, size, size);
+  });
+
+  const texture = new CanvasTexture(element);
+  texture.colorSpace = SRGBColorSpace;
+  return texture;
+}
+
+/**
+ * The studio floor's falloff.
+ *
+ * A seamless backdrop has no horizon and no edges — the ground simply runs out
+ * of light. This is that: bright where the key lands, darkening away in every
+ * direction, so the plane's rim never announces itself as a rim. Multiplied
+ * onto the floor material, so it shades rather than tints.
+ */
+export function studioFloorTexture(): Texture {
+  const element = canvas(512, (ctx, size) => {
+    const gradient = ctx.createRadialGradient(
+      size / 2,
+      size * 0.44,
+      size * 0.04,
+      size / 2,
+      size * 0.44,
+      size * 0.52,
+    );
+    gradient.addColorStop(0, '#ffffff');
+    gradient.addColorStop(0.38, '#f2f2f3');
+    gradient.addColorStop(0.72, '#c9c9cd');
+    gradient.addColorStop(1, '#9d9da3');
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, size, size);
+  });
+
+  const texture = new CanvasTexture(element);
+  texture.colorSpace = SRGBColorSpace;
+  return texture;
+}
+
+/**
+ * Brushed leather: fine grain plus a few broad creases, used as a roughness
+ * break-up on the chair so its cushions are not two flat brown boxes.
+ */
+export function leatherTexture(): Texture {
+  const element = canvas(256, (ctx, size) => {
+    ctx.fillStyle = '#7f7f7f';
+    ctx.fillRect(0, 0, size, size);
+
+    // Grain.
+    const grain = ctx.getImageData(0, 0, size, size);
+    for (let i = 0; i < grain.data.length; i += 4) {
+      const n = (Math.random() - 0.5) * 34;
+      grain.data[i] += n;
+      grain.data[i + 1] += n;
+      grain.data[i + 2] += n;
+    }
+    ctx.putImageData(grain, 0, 0);
+
+    // Creases, which is what actually reads at this distance.
+    ctx.strokeStyle = 'rgba(255,255,255,0.22)';
+    ctx.lineWidth = 2;
+    for (let i = 0; i < 12; i += 1) {
+      ctx.beginPath();
+      const y = Math.random() * size;
+      ctx.moveTo(0, y);
+      ctx.bezierCurveTo(
+        size * 0.3,
+        y + (Math.random() - 0.5) * 40,
+        size * 0.7,
+        y + (Math.random() - 0.5) * 40,
+        size,
+        y + (Math.random() - 0.5) * 20,
+      );
+      ctx.stroke();
+    }
+  });
+
+  const texture = new CanvasTexture(element);
+  texture.wrapS = RepeatWrapping;
+  texture.wrapT = RepeatWrapping;
+  return texture;
+}
+
+/**
+ * A split monstera leaf, drawn as a silhouette.
+ *
+ * Leaves are the one thing in the scene that cannot be made of boxes — the
+ * shape *is* the plant. So each one is a single double-sided plane wearing
+ * this as an alpha mask: a lobed outline with the characteristic slits cut in
+ * from the rim, plus a midrib and veins painted into the colour. Twenty of
+ * these cost one texture and twenty quads.
+ */
+export function leafTexture(): Texture {
+  const element = canvas(256, (ctx, size) => {
+    ctx.clearRect(0, 0, size, size);
+
+    const cx = size / 2;
+    const tip = size * 0.06;
+    const base = size * 0.96;
+    const halfWidth = size * 0.31;
+
+    // The blade: two mirrored bezier sweeps from stem to tip.
+    ctx.beginPath();
+    ctx.moveTo(cx, base);
+    ctx.bezierCurveTo(cx + halfWidth, base - size * 0.2, cx + halfWidth, tip + size * 0.26, cx, tip);
+    ctx.bezierCurveTo(cx - halfWidth, tip + size * 0.26, cx - halfWidth, base - size * 0.2, cx, base);
+    ctx.closePath();
+    ctx.fillStyle = '#3f7a35';
+    ctx.fill();
+
+    // Midrib and veins, a shade lighter so they catch as the leaf turns.
+    ctx.strokeStyle = 'rgba(150, 196, 120, 0.55)';
+    ctx.lineWidth = size * 0.012;
+    ctx.beginPath();
+    ctx.moveTo(cx, base);
+    ctx.lineTo(cx, tip + size * 0.02);
+    ctx.stroke();
+
+    ctx.lineWidth = size * 0.007;
+    for (let i = 1; i <= 6; i += 1) {
+      const t = i / 7;
+      const y = base - (base - tip) * t;
+      const reach = halfWidth * Math.sin(t * Math.PI) * 0.92;
+      for (const side of [-1, 1]) {
+        ctx.beginPath();
+        ctx.moveTo(cx, y);
+        ctx.quadraticCurveTo(cx + side * reach * 0.6, y - size * 0.03, cx + side * reach, y - size * 0.07);
+        ctx.stroke();
+      }
+    }
+
+    // The slits. Cut in from each edge toward the midrib, stopping short of it.
+    ctx.globalCompositeOperation = 'destination-out';
+    ctx.lineCap = 'round';
+    ctx.lineWidth = size * 0.035;
+    for (let i = 1; i <= 5; i += 1) {
+      const t = i / 6;
+      const y = base - (base - tip) * t;
+      const reach = halfWidth * Math.sin(t * Math.PI);
+      for (const side of [-1, 1]) {
+        ctx.beginPath();
+        ctx.moveTo(cx + side * (reach + size * 0.02), y - size * 0.05);
+        ctx.lineTo(cx + side * size * 0.045, y + size * 0.015);
+        ctx.stroke();
+      }
+    }
+    ctx.globalCompositeOperation = 'source-over';
+  });
+
+  const texture = new CanvasTexture(element);
+  texture.colorSpace = SRGBColorSpace;
+  return texture;
+}
+
+/**
+ * The studio's backdrop, as a vertical gradient.
+ *
+ * Painted onto a dome around the whole scene rather than set as
+ * `scene.background`, which would make the canvas opaque and bury the CSS3D
+ * layer the screen lives in. A dome is ordinary geometry, so the depth-only
+ * plane on the glass rejects it exactly the way it rejected the old room's
+ * walls. Its horizon stop is also the fog colour, which is what lets the
+ * ground run out of light instead of running out of geometry.
+ */
+export function backdropTexture(): Texture {
+  const element = canvas(64, (ctx, size) => {
+    const gradient = ctx.createLinearGradient(0, 0, 0, size);
+    // v runs zenith (0) to nadir (1), so the horizon is the equator at 0.5.
+    // Everything from just above it down is held at one flat colour — the fog
+    // colour — so wherever the ground's far rim actually lands, it lands on
+    // its own shade and the join cannot be seen.
+    gradient.addColorStop(0, '#c6c6cc'); // a soft darkening overhead
+    gradient.addColorStop(0.3, '#dedee2'); // the bright band behind the desk
+    gradient.addColorStop(0.44, '#cfcfd4');
+    gradient.addColorStop(1, '#cfcfd4'); // horizon — must equal STUDIO_FAR
     ctx.fillStyle = gradient;
     ctx.fillRect(0, 0, size, size);
   });

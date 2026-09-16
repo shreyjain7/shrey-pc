@@ -7,11 +7,22 @@
    ========================================================================= */
 
 :root {
-  /* Ink, not light: the room behind this is a daylit wall now, so the page
+  /* Ink, not light: the scene behind this is a bright studio, so the page
      chrome is dark type on it rather than pale type on black. */
-  --ui-text: #2b2118;
-  --ui-dim: #6b5844;
-  --ui-accent: #9a5b1f;
+  --ui-text: #23232a;
+  --ui-dim: #6a6a74;
+  --ui-accent: #35353e;
+  /* The studio backdrop. --studio-far must match STUDIO_FAR in Room.ts, which
+     is the fog colour the ground plane's far rim dissolves into. */
+  --studio-near: #eaeaed;
+  --studio-mid: #d6d6da;
+  --studio-far: #cfcfd4;
+  --studio: radial-gradient(
+    132% 96% at 50% 34%,
+    var(--studio-near) 0%,
+    var(--studio-mid) 44%,
+    var(--studio-far) 100%
+  );
   --ui-mono: ui-monospace, 'Cascadia Mono', 'SF Mono', Menlo, Consolas, monospace;
   /* Overwritten from JS with the real visual-viewport height. */
   --vh: 100vh;
@@ -29,9 +40,11 @@ body {
   width: 100%;
   height: 100%;
   overflow: hidden;
-  /* Shows at the edges of the canvas, so it matches the room's own shadows
-     rather than punching a black hole around a daylit scene. */
-  background: #2a2018;
+  /* This is the backdrop. The canvas is cleared to transparent (an opaque
+     scene background would bury the CSS3D layer the screen lives in), so the
+     studio's sky is painted here in CSS and the 3D ground fades into it. */
+  background: var(--studio);
+  background-attachment: fixed;
   /* Stop iOS rubber-banding the whole page behind the canvas. */
   overscroll-behavior: none;
   touch-action: none;
@@ -97,7 +110,7 @@ body.is-hovering-monitor #webgl {
   justify-content: center;
   gap: 18px;
   padding: 32px 24px;
-  background: #05070a;
+  background: var(--studio);
   transition: opacity 700ms ease 150ms, visibility 700ms 150ms;
 }
 
@@ -131,7 +144,7 @@ body.is-hovering-monitor #webgl {
   width: min(260px, 70vw);
   height: 2px;
   overflow: hidden;
-  background: rgba(255, 255, 255, 0.11);
+  background: rgba(35, 35, 42, 0.16);
 }
 
 .loader__fill {
@@ -140,7 +153,6 @@ body.is-hovering-monitor #webgl {
   transform: scaleX(0);
   transform-origin: left;
   background: var(--ui-accent);
-  box-shadow: 0 0 12px rgba(95, 208, 255, 0.7);
   transition: transform 260ms ease;
 }
 
@@ -205,7 +217,7 @@ body.is-ready .ui-panel--always {
   padding: 11px 20px;
   border: 1px solid rgba(70, 50, 30, 0.16);
   border-radius: 999px;
-  background: rgba(255, 250, 240, 0.78);
+  background: rgba(255, 255, 255, 0.8);
   backdrop-filter: blur(6px);
   font-size: 11.5px;
   letter-spacing: 2px;
@@ -266,7 +278,7 @@ body.is-ready .ui-panel--always {
   padding: 11px 20px;
   border: 1px solid rgba(70, 50, 30, 0.18);
   border-radius: 999px;
-  background: rgba(255, 250, 240, 0.72);
+  background: rgba(255, 255, 255, 0.76);
   backdrop-filter: blur(6px);
   color: var(--ui-text);
   font-family: inherit;
@@ -280,7 +292,7 @@ body.is-ready .ui-panel--always {
 
 .exit:hover {
   border-color: rgba(154, 91, 31, 0.55);
-  background: rgba(154, 91, 31, 0.14);
+  background: rgba(53, 53, 62, 0.12);
 }
 
 /* --- Corner controls ---------------------------------------------------- */
@@ -300,7 +312,7 @@ body.is-ready .ui-panel--always {
   padding: 0;
   border: 1px solid rgba(70, 50, 30, 0.18);
   border-radius: 50%;
-  background: rgba(255, 250, 240, 0.72);
+  background: rgba(255, 255, 255, 0.76);
   backdrop-filter: blur(6px);
   color: var(--ui-text);
   cursor: pointer;
@@ -532,7 +544,7 @@ body.is-workstation .social {
   padding: 14px 16px;
   border: 1px solid rgba(70, 50, 30, 0.18);
   border-radius: 11px;
-  background: rgba(255, 250, 240, 0.76);
+  background: rgba(255, 255, 255, 0.8);
   backdrop-filter: blur(9px);
   -webkit-backdrop-filter: blur(9px);
 }
@@ -555,7 +567,7 @@ body.is-workstation .social {
   height: 3px;
   overflow: hidden;
   border-radius: 999px;
-  background: rgba(70, 50, 30, 0.14);
+  background: rgba(35, 35, 42, 0.14);
 }
 
 .telemetry__fill {

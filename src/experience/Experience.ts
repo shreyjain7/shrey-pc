@@ -138,7 +138,7 @@ export class Experience {
     this.loader.classList.add('is-done');
     document.body.classList.remove('is-loading');
     document.body.classList.add('is-ready');
-    this.world.monitor.setPowered(true);
+    this.world.setPowered(true);
     // The CRT is showing its standby screen, so the machine is already
     // running — the case should be lit and idling, not a black box.
     telemetry.setPowered(true);
@@ -458,7 +458,7 @@ export class Experience {
     dot.className = 'hint__dot';
     hint.append(
       dot,
-      document.createTextNode('Tap the Macintosh to sit down'),
+      document.createTextNode('Tap the computer to sit down'),
     );
 
     const social = document.createElement('div');
@@ -590,7 +590,7 @@ export class Experience {
     // Ease the screen's spill light toward whatever the OS is currently showing.
     const target = this.os.brightness * 5;
     this.glow = MathUtils.damp(this.glow, target, 3.5, delta);
-    this.world.monitor?.setGlow(this.glow);
+    this.world.setGlow(this.glow);
 
     this.renderer.update();
     this.updateCaseCam(delta);

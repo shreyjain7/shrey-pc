@@ -24,6 +24,66 @@
   --mono: ui-monospace, 'Cascadia Mono', 'SF Mono', Menlo, Consolas, monospace;
   --sans: system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
 
+  /*
+   * Meadow: the green hill under a blue sky that every beige PC of this era
+   * booted into. Drawn here rather than shipped as an image — it is an
+   * original rendering of the idea, not anyone's photograph, and as pure
+   * gradients it costs no payload and stays sharp at any size.
+   *
+   * The hill is one big ellipse centred well below the screen: a vertical
+   * radius of 118% about a centre at 170% puts its crest at 52% down, and
+   * because only the top of that arc is in frame the horizon curves gently
+   * instead of bulging. Everything past the rim goes transparent, which is
+   * what cuts the skyline. A second, slightly larger ellipse sits behind it
+   * so a band of haze shows above the crest.
+   */
+  --wall-meadow:
+    radial-gradient(
+      150% 118% at 50% 170%,
+      #4e8f2c 0%,
+      #5d9c33 60%,
+      #74b246 80%,
+      #88c45a 94%,
+      #98cd69 99.2%,
+      rgba(152, 205, 105, 0) 99.7%
+    ),
+    radial-gradient(
+      152% 121% at 50% 172%,
+      rgba(255, 255, 255, 0) 95%,
+      rgba(255, 255, 255, 0.3) 99%,
+      rgba(255, 255, 255, 0) 99.7%
+    ),
+    /* A second ridge further off to the left, lighter and bluer the way
+       distance makes ground go. One dome reads as a hemisphere; two reads as
+       terrain. */
+    radial-gradient(
+      70% 46% at 14% 96%,
+      #7fb35f 0%,
+      #93c079 82%,
+      #a2c98c 99.3%,
+      rgba(162, 201, 140, 0) 99.7%
+    ),
+    /* Clouds, each one two overlapping lobes at different sizes and
+       brightnesses. A single ellipse reads as a blob, and four identical
+       ellipses in a row read as a pattern. */
+    radial-gradient(15% 5.5% at 17% 25%, rgba(255, 255, 255, 0.92), rgba(255, 255, 255, 0) 72%),
+    radial-gradient(22% 7.5% at 24% 22%, rgba(255, 255, 255, 0.68), rgba(255, 255, 255, 0) 74%),
+    radial-gradient(11% 4% at 37% 16%, rgba(255, 255, 255, 0.8), rgba(255, 255, 255, 0) 72%),
+    radial-gradient(17% 6% at 44% 19%, rgba(255, 255, 255, 0.48), rgba(255, 255, 255, 0) 76%),
+    radial-gradient(13% 5% at 68% 13%, rgba(255, 255, 255, 0.88), rgba(255, 255, 255, 0) 70%),
+    radial-gradient(24% 8% at 77% 16%, rgba(255, 255, 255, 0.6), rgba(255, 255, 255, 0) 76%),
+    radial-gradient(10% 3.5% at 89% 29%, rgba(255, 255, 255, 0.58), rgba(255, 255, 255, 0) 72%),
+    radial-gradient(34% 9% at 56% 39%, rgba(255, 255, 255, 0.38), rgba(255, 255, 255, 0) 76%),
+    linear-gradient(
+      180deg,
+      #1a5cb5 0%,
+      #2f7cc9 26%,
+      #5aa3dd 42%,
+      #93c9ea 50%,
+      #c4e2f4 58%,
+      #dff0fa 100%
+    );
+
   position: relative;
   /* Fills whatever hosts it: the 1280x960 mount on the glass, or the
      viewport-sized overlay on a phone. */
@@ -150,13 +210,42 @@
   justify-content: center;
   gap: 10px;
   text-align: center;
-  background: radial-gradient(90% 80% at 50% 42%, #16202e 0%, #070a10 100%);
+  background: var(--wall-meadow);
 }
 
 /*
- * The headshot is cut out on white, so it is knocked back a little: at full
- * brightness the disc blows out against the screen's near-black and reads as
- * a lamp rather than a face.
+ * A scrim under the type. The name sits almost exactly on the horizon, where
+ * white-on-pale-sky is the one place this wallpaper cannot carry text, so the
+ * middle of the frame is darkened and the edges are left alone.
+ *
+ * Absolutely positioned, so it is taken out of flow and never becomes a flex
+ * item of its own parent — and the real children are lifted above it, since a
+ * positioned pseudo-element would otherwise paint over static siblings.
+ */
+.layer--standby::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(
+    74% 58% at 50% 47%,
+    rgba(4, 10, 18, 0.52) 0%,
+    rgba(4, 10, 18, 0.34) 52%,
+    rgba(4, 10, 18, 0.1) 78%,
+    rgba(4, 10, 18, 0.22) 100%
+  );
+  pointer-events: none;
+}
+
+.layer--standby > * {
+  position: relative;
+  z-index: 1;
+}
+
+/*
+ * The headshot, ringed the way a login screen rings it. It used to be knocked
+ * back to stop it blowing out against the old near-black standby; over a lit
+ * wallpaper it wants the opposite — full brightness, and a dark drop so the
+ * white cut-out does not dissolve into the sky behind it.
  */
 .standby__photo {
   width: 168px;
@@ -164,10 +253,9 @@
   margin-bottom: 22px;
   border-radius: 50%;
   object-fit: cover;
-  filter: brightness(0.88) contrast(1.04) saturate(0.94);
   box-shadow:
-    0 0 0 2px rgba(95, 208, 255, 0.35),
-    0 0 34px rgba(95, 208, 255, 0.22);
+    0 0 0 3px rgba(255, 255, 255, 0.85),
+    0 10px 30px rgba(4, 10, 18, 0.45);
   opacity: 0;
   transform: scale(0.94);
   transition: opacity 0.5s ease, transform 0.5s cubic-bezier(0.2, 0.8, 0.3, 1);
@@ -184,8 +272,10 @@
   font-size: 62px;
   letter-spacing: 4px;
   font-weight: 600;
-  color: #eaf3ff;
-  text-shadow: 0 0 26px rgba(95, 208, 255, 0.35);
+  color: #ffffff;
+  text-shadow:
+    0 2px 20px rgba(4, 10, 18, 0.6),
+    0 1px 3px rgba(4, 10, 18, 0.5);
 }
 
 .standby__role {
@@ -194,7 +284,8 @@
   font-size: 24px;
   letter-spacing: 7px;
   text-transform: uppercase;
-  color: var(--accent);
+  color: rgba(255, 255, 255, 0.88);
+  text-shadow: 0 1px 12px rgba(4, 10, 18, 0.6);
 }
 
 .standby__hint {
@@ -202,8 +293,15 @@
   font-family: var(--mono);
   font-size: 19px;
   letter-spacing: 3px;
-  color: var(--dim);
+  color: rgba(255, 255, 255, 0.84);
+  text-shadow: 0 1px 10px rgba(4, 10, 18, 0.55);
   animation: standby-pulse 2.6s ease-in-out infinite;
+}
+
+/* The caret rides in the hint, which is now over the hill — accent cyan is
+   lost on green, so on standby alone it goes white. */
+.standby__hint .caret {
+  background: rgba(255, 255, 255, 0.9);
 }
 
 @keyframes standby-pulse {

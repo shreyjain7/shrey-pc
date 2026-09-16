@@ -9,6 +9,13 @@ export interface Wallpaper {
 
 export const WALLPAPERS: Wallpaper[] = [
   {
+    id: 'meadow',
+    label: 'Meadow',
+    // The hill-and-sky the standby screen wears. Defined in screen.css so the
+    // two cannot drift apart, and referenced rather than copied here.
+    css: 'var(--wall-meadow)',
+  },
+  {
     id: 'midnight',
     label: 'Midnight',
     css:

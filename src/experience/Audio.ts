@@ -61,6 +61,33 @@ export class Audio {
     for (let i = 0; i < length; i += 1) channel[i] = Math.random() * 2 - 1;
 
     void this.context.resume();
+    this.watchInterruptions();
+  }
+
+  /**
+   * iOS parks the context whenever the page loses the audio session — a phone
+   * call, the lock button, a swipe to another app — and leaves it in
+   * `interrupted` (or `suspended`) afterwards. Nothing brings it back on its
+   * own, so the hum simply never returns. Suspend deliberately on the way out,
+   * which also stops a hidden tab burning battery on two oscillators, and
+   * resume on the way back and on the next touch, which is the gesture iOS
+   * insists on when a plain resume() is refused.
+   */
+  private watchInterruptions() {
+    const ctx = this.context;
+    if (!ctx) return;
+
+    const revive = () => {
+      if (document.visibilityState !== 'visible') return;
+      if (ctx.state !== 'running' && ctx.state !== 'closed') void ctx.resume().catch(() => {});
+    };
+
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'hidden') void ctx.suspend().catch(() => {});
+      else revive();
+    });
+    window.addEventListener('pageshow', revive);
+    window.addEventListener('pointerdown', revive, { passive: true });
   }
 
   toggleMute() {
@@ -196,6 +223,39 @@ export class Audio {
     const notes = [523.25, 659.25, 783.99, 1046.5];
     notes.forEach((frequency, index) => {
       this.tone(frequency, 0.55, 0.09, 'triangle', index * 0.09);
+    });
+  }
+
+  /**
+   * The picture tube letting go: the flyback whine sliding down as the beam
+   * collapses, over a soft electrical pop.
+   */
+  powerDown() {
+    if (!this.ready) return;
+    const ctx = this.context!;
+    const now = ctx.currentTime;
+
+    const osc = ctx.createOscillator();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(2400, now);
+    osc.frequency.exponentialRampToValueAtTime(90, now + 0.42);
+
+    const envelope = ctx.createGain();
+    envelope.gain.setValueAtTime(0.0001, now);
+    envelope.gain.exponentialRampToValueAtTime(0.07, now + 0.02);
+    envelope.gain.exponentialRampToValueAtTime(0.0001, now + 0.46);
+
+    osc.connect(envelope).connect(this.master!);
+    osc.start(now);
+    osc.stop(now + 0.5);
+    this.noise(0.08, 0.22, 700);
+  }
+
+  /** A little square-wave fanfare, for secrets. */
+  jingle() {
+    const notes = [659.25, 783.99, 1318.5, 1046.5, 1174.66, 1567.98];
+    notes.forEach((frequency, index) => {
+      this.tone(frequency, 0.16, 0.05, 'square', index * 0.085);
     });
   }
 

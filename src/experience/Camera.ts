@@ -72,6 +72,16 @@ export class Camera {
   private parallaxTarget = { x: 0, y: 0 };
 
   /**
+   * How the phone is being held relative to how it was picked up, -1..1 on
+   * each axis. A phone has no hover, so the room's parallax comes from the
+   * hand instead — and because a tilt is a much bigger, more deliberate
+   * gesture than a cursor drifting across a page, it is allowed a much wider
+   * swing than the pointer's.
+   */
+  private tilt = { x: 0, y: 0 };
+  private tiltTarget = { x: 0, y: 0 };
+
+  /**
    * Dolly, as a multiplier on whatever distance the current pose wants. One is
    * the pose as authored; below one is closer. Smoothed, so a wheel notch
    * glides rather than jumps.
@@ -239,6 +249,12 @@ export class Camera {
     this.orbitTarget.polar = MathUtils.clamp(this.orbitTarget.polar, -POLAR_LIMIT, POLAR_LIMIT);
   };
 
+  /** Fed from the device's orientation; zero when there is none. */
+  setTilt(x: number, y: number) {
+    this.tiltTarget.x = MathUtils.clamp(x, -1, 1);
+    this.tiltTarget.y = MathUtils.clamp(y, -1, 1);
+  }
+
   /** Swing the view back to the resting pose. */
   resetView() {
     this.orbitTarget = { azimuth: 0, polar: 0 };
@@ -380,9 +396,11 @@ export class Camera {
     const sway = Math.sin(elapsed * 0.35) * 0.012 + Math.sin(elapsed * 0.21) * 0.008;
 
     const azimuth =
-      rest.theta + (this.orbit.azimuth + this.parallax.x * 0.06 + sway * 0.6) * weight;
+      rest.theta +
+      (this.orbit.azimuth + this.parallax.x * 0.06 - this.tilt.x * 0.3 + sway * 0.6) * weight;
     const polar = MathUtils.clamp(
-      rest.phi + (-this.orbit.polar + this.parallax.y * 0.035 - sway * 0.3) * weight,
+      rest.phi +
+        (-this.orbit.polar + this.parallax.y * 0.035 - this.tilt.y * 0.14 - sway * 0.3) * weight,
       0.2,
       Math.PI / 2 + 0.1,
     );
@@ -404,6 +422,9 @@ export class Camera {
     const parallaxWeight = this.dragging ? 0 : 1;
     this.parallax.x = MathUtils.damp(this.parallax.x, this.parallaxTarget.x * parallaxWeight, 3, delta);
     this.parallax.y = MathUtils.damp(this.parallax.y, this.parallaxTarget.y * parallaxWeight, 3, delta);
+    // Heavier than the pointer: a hand trembles, and the room should not.
+    this.tilt.x = MathUtils.damp(this.tilt.x, this.tiltTarget.x * parallaxWeight, 4, delta);
+    this.tilt.y = MathUtils.damp(this.tilt.y, this.tiltTarget.y * parallaxWeight, 4, delta);
 
     this.computeLivePose(elapsed);
 

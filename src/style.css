@@ -56,6 +56,10 @@ body {
   -webkit-font-smoothing: antialiased;
   -webkit-tap-highlight-color: transparent;
   -webkit-text-size-adjust: 100%;
+  /* A long press on the room is an orbit that has not started moving yet, not
+     a request for the iOS callout or the text-selection loupe. */
+  -webkit-touch-callout: none;
+  user-select: none;
 }
 
 /* --- Render layers ------------------------------------------------------ */
@@ -265,8 +269,12 @@ body.is-ready .ui-panel--always {
   transition: color 160ms ease;
 }
 
-.social a:hover {
-  color: var(--ui-accent);
+/* Hover only where there is one: iOS leaves :hover stuck on whatever was
+   tapped last, so a pill stays lit until something else is touched. */
+@media (hover: hover) {
+  .social a:hover {
+    color: var(--ui-accent);
+  }
 }
 
 .exit {
@@ -290,9 +298,13 @@ body.is-ready .ui-panel--always {
     visibility 500ms, transform 500ms ease;
 }
 
-.exit:hover {
-  border-color: rgba(154, 91, 31, 0.55);
-  background: rgba(53, 53, 62, 0.12);
+/* Hover only where there is one: iOS leaves :hover stuck on whatever was
+   tapped last, so a pill stays lit until something else is touched. */
+@media (hover: hover) {
+  .exit:hover {
+    border-color: rgba(154, 91, 31, 0.55);
+    background: rgba(53, 53, 62, 0.12);
+  }
 }
 
 /* --- Corner controls ---------------------------------------------------- */
@@ -324,9 +336,13 @@ body.is-ready .ui-panel--always {
   height: 17px;
 }
 
-.ctrl:hover {
-  border-color: rgba(95, 208, 255, 0.55);
-  background: rgba(95, 208, 255, 0.12);
+/* Hover only where there is one: iOS leaves :hover stuck on whatever was
+   tapped last, so a pill stays lit until something else is touched. */
+@media (hover: hover) {
+  .ctrl:hover {
+    border-color: rgba(95, 208, 255, 0.55);
+    background: rgba(95, 208, 255, 0.12);
+  }
 }
 
 .ctrl.is-off {
@@ -406,6 +422,14 @@ body.is-ready .ui-panel--always {
   .loader__name {
     font-size: 12px;
     letter-spacing: 5px;
+  }
+}
+
+/* Five controls (fullscreen and tilt both present, as on Android) do not fit
+   beside the name on a narrow phone, so they stack down the right edge. */
+@media (max-width: 430px) {
+  .controls:has(> :nth-child(5)) {
+    flex-direction: column;
   }
 }
 
@@ -585,6 +609,30 @@ body.is-workstation .social {
   color: var(--ui-text);
 }
 
+/* --- Tilt ------------------------------------------------------------------
+   On iOS the tilt button is also the permission prompt, so until it has been
+   pressed it rings a few times to say so — then settles, rather than nagging. */
+
+.ctrl.is-inviting {
+  animation: ctrl-invite 1.8s ease-out 1.2s 4;
+}
+
+@keyframes ctrl-invite {
+  0% {
+    box-shadow: 0 0 0 0 rgba(53, 53, 62, 0.45);
+  }
+  70%,
+  100% {
+    box-shadow: 0 0 0 12px rgba(53, 53, 62, 0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ctrl.is-inviting {
+    animation: none;
+  }
+}
+
 /* --- The camera button -------------------------------------------------- */
 
 .ctrl.is-active {
@@ -650,4 +698,17 @@ body.is-ready.is-focused .exit {
   select {
     font-size: 16px !important;
   }
+}
+
+/*
+ * Fields always take text. The room and the screen both switch selection off,
+ * and WebKit carries an ancestor's `-webkit-user-select: none` into inputs —
+ * on iOS that can leave a field that focuses, raises the keyboard, and then
+ * refuses every keystroke.
+ */
+input,
+textarea,
+[contenteditable='true'] {
+  user-select: text;
+  -webkit-touch-callout: default;
 }

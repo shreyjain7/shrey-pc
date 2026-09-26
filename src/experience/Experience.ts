@@ -1,6 +1,7 @@
 import { MathUtils, PerspectiveCamera, Scene, Vector3, WebGLRenderer } from 'three';
 import { initAnalytics, track } from '../analytics';
 import { links, profile } from '../data/cv';
+import { reducedMotion } from '../os/anim';
 import { OS } from '../os/OS';
 import { registerScene, type RoomView } from '../os/system';
 import { SCREEN_CENTER } from '../world/layout';
@@ -8,6 +9,7 @@ import { telemetry } from '../world/telemetry';
 import { World } from '../world/World';
 import { Audio } from './Audio';
 import { Camera } from './Camera';
+import { Motion } from './Motion';
 import { Renderer } from './Renderer';
 import { Sizes } from './Sizes';
 import { Time } from './Time';
@@ -24,6 +26,7 @@ export class Experience {
   private readonly renderer: Renderer;
   private readonly world: World;
   private readonly os: OS;
+  private readonly motion: Motion;
 
   private readonly ui: HTMLElement;
   private loader!: HTMLElement;
@@ -36,6 +39,12 @@ export class Experience {
   private readonly mount = document.createElement('div');
   private glow = 0;
   private ready = false;
+  /**
+   * When a full-bleed overlay went up, in performance.now() ms.
+   * Once it has lifted in, it covers the whole scene, and drawing a room nobody
+   * can see is a phone's battery and its main thread spent for nothing.
+   */
+  private coveredSince = 0;
   private panelClock = 0;
 
   /** Where the OS currently lives, so a mode change knows what to undo. */
@@ -72,6 +81,12 @@ export class Experience {
     );
     this.renderer = new Renderer(canvas, cssTarget, this.scene, this.camera, this.sizes);
 
+    this.motion = new Motion(
+      (x, y) => this.camera.setTilt(x, y),
+      // Shaking the phone is the Konami code for people without arrow keys.
+      () => this.os.party(),
+    );
+
     this.buildUI();
 
     // With no tower to look into, the case cam orbits the machine itself —
@@ -85,6 +100,14 @@ export class Experience {
       resetView: () => this.camera.resetView(),
       toggleFullscreen: () => this.toggleFullscreen(),
     });
+
+    // iOS Safari still zooms the *page* on a two-finger pinch whatever the
+    // viewport meta says, which strands the scene half off the screen. Its
+    // own gesture events are the only reliable handle on that; the camera's
+    // pinch reads pointer events, which this leaves alone.
+    for (const type of ['gesturestart', 'gesturechange', 'gestureend']) {
+      document.addEventListener(type, (event) => event.preventDefault(), { passive: false });
+    }
 
     document.body.classList.add('is-loading', 'is-idle');
     this.time.on((delta, elapsed) => this.update(delta, elapsed));
@@ -176,13 +199,23 @@ export class Experience {
 
   /** One implementation, called from the corner pill and from the menu bar. */
   toggleFullscreen() {
-    if (document.fullscreenElement) {
-      void document.exitFullscreen();
+    const doc = document as Document & {
+      webkitFullscreenElement?: Element | null;
+      webkitExitFullscreen?: () => void;
+    };
+    const root = document.documentElement as HTMLElement & {
+      webkitRequestFullscreen?: () => void;
+    };
+
+    if (document.fullscreenElement || doc.webkitFullscreenElement) {
+      if (document.exitFullscreen) void document.exitFullscreen().catch(() => {});
+      else doc.webkitExitFullscreen?.();
       return;
     }
-    void document.documentElement.requestFullscreen?.().catch(() => {
-      // iOS Safari has no Fullscreen API on iPhone; nothing to fall back to.
-    });
+
+    // iPadOS Safari before 16.4 only has the prefixed call.
+    if (root.requestFullscreen) void root.requestFullscreen().catch(() => {});
+    else root.webkitRequestFullscreen?.();
   }
 
   private enterScreen() {
@@ -258,16 +291,60 @@ export class Experience {
 
   /** Lift the OS off the glass and into a screen-space panel. */
   private attachOverlay(kind: 'workstation' | 'phone') {
+    // Where the glass is on screen, measured before the OS leaves it.
+    const glass = kind === 'phone' && this.os.root.parentElement === this.mount
+      ? this.mount.getBoundingClientRect()
+      : null;
+
     if (this.os.root.parentElement !== this.overlay) this.overlay.append(this.os.root);
     this.os.setOverlay(true);
     document.body.classList.add('is-overlay');
     this.overlay.dataset.kind = kind;
+    // The phone overlay always goes edge to edge; the workstation panel only
+    // does below the width where style.css stops docking it to one side.
+    const fullBleed = kind === 'phone' || window.matchMedia('(max-width: 820px)').matches;
+    this.coveredSince = fullBleed ? performance.now() : 0;
+
+    if (glass) this.liftOff(glass);
+  }
+
+  /**
+   * The phone's hand-off from the glass to the fullscreen overlay.
+   *
+   * It used to be a cross-fade, which reads as the page swapping one picture
+   * for another. Instead the overlay starts clipped to exactly the rectangle
+   * the glass occupied on screen — so for a frame nothing appears to change —
+   * and then opens outward to the edges, as if the picture had been lifted
+   * off the tube and into the hand.
+   */
+  private liftOff(glass: DOMRect) {
+    if (reducedMotion || glass.width < 40 || glass.height < 30) return;
+
+    const box = this.overlay.getBoundingClientRect();
+    const clamp = (value: number, max: number) => Math.min(Math.max(value, 0), max);
+    const top = clamp(glass.top - box.top, box.height);
+    const bottom = clamp(box.bottom - glass.bottom, box.height);
+    const left = clamp(glass.left - box.left, box.width);
+    const right = clamp(box.right - glass.right, box.width);
+
+    this.overlay.animate(
+      [
+        {
+          opacity: 1,
+          clipPath: `inset(${top}px ${right}px ${bottom}px ${left}px round 14px)`,
+          transform: 'scale(0.985)',
+        },
+        { opacity: 1, clipPath: 'inset(0px 0px 0px 0px round 0px)', transform: 'none' },
+      ],
+      { duration: 620, easing: 'cubic-bezier(0.22, 1, 0.36, 1)' },
+    );
   }
 
   /** Put it back on the glass. */
   private detachOverlay() {
     if (!document.body.classList.contains('is-overlay')) return;
     document.body.classList.remove('is-overlay');
+    this.coveredSince = 0;
     this.os.setOverlay(false);
     this.mount.append(this.os.root);
     delete this.overlay.dataset.kind;
@@ -542,7 +619,34 @@ export class Experience {
       fullscreenButton.innerHTML = document.fullscreenElement ? ICON_COLLAPSE : ICON_EXPAND;
     });
 
-    controls.append(this.viewButton, this.soundButton, resetButton, fullscreenButton);
+    controls.append(this.viewButton, this.soundButton, resetButton);
+
+    // Tilt, on anything that can tilt. Android needs no permission, so it is
+    // simply on; iOS will only ask from inside a tap, so there the button is
+    // the ask, and it pulses a few times to say it is worth pressing.
+    if (this.motion.supported) {
+      const tiltButton = this.iconButton('Tilt to look around', ICON_TILT, () => {
+        this.audio.click();
+        tiltButton.classList.remove('is-inviting');
+        if (this.motion.enabled) {
+          this.motion.disable();
+          tiltButton.classList.remove('is-active');
+          return;
+        }
+        void this.motion.enable().then((on) => {
+          tiltButton.classList.toggle('is-active', on);
+          if (on) track('tilt_enabled');
+        });
+      });
+      controls.append(tiltButton);
+
+      if (this.motion.needsPermission) tiltButton.classList.add('is-inviting');
+      else void this.motion.enable().then((on) => tiltButton.classList.toggle('is-active', on));
+    }
+
+    // An iPhone has no Fullscreen API at all, so the button would do nothing.
+    const doc = document as Document & { webkitFullscreenEnabled?: boolean };
+    if (document.fullscreenEnabled || doc.webkitFullscreenEnabled) controls.append(fullscreenButton);
 
     this.overlay = document.createElement('div');
     this.overlay.id = 'os-overlay';
@@ -592,7 +696,10 @@ export class Experience {
     this.glow = MathUtils.damp(this.glow, target, 3.5, delta);
     this.world.setGlow(this.glow);
 
-    this.renderer.update();
+    // The overlay's lift-off is 620ms; after that nothing of the room shows, so
+    // stop drawing it. The case cam has its own renderer and keeps running.
+    const covered = this.coveredSince > 0 && performance.now() - this.coveredSince > 700;
+    if (!covered) this.renderer.update();
     this.updateCaseCam(delta);
     this.updateTelemetryPanel(delta);
   }
@@ -654,6 +761,11 @@ const ICON_MUTED = svg(
 const ICON_VIEW = svg(
   '<rect x="3" y="5.5" width="13" height="9.5" rx="1.6"/>' +
     '<path d="M16 9.2 21 6.6v10.8L16 14.8z"/><path d="M6.5 19h7"/>',
+);
+
+const ICON_TILT = svg(
+  '<rect x="8" y="3.5" width="8" height="17" rx="2" transform="rotate(-16 12 12)"/>' +
+    '<path d="M3.2 9.5a9 9 0 0 0 1 6.2"/><path d="M20.8 14.5a9 9 0 0 0-1-6.2"/>',
 );
 
 const ICON_RESET = svg(

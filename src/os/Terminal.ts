@@ -9,7 +9,7 @@ import {
 } from '../data/timetable';
 import { describeNextClass } from './apps/Timetable';
 import { basename, dirname, fs, HOME, join, normalise, type FsNode } from './fs';
-import { openApp, openPath } from './system';
+import { barrelRoll, openApp, openPath, party, startScreensaver } from './system';
 import { el } from './ui';
 
 let onKeystroke: () => void = () => {};
@@ -68,7 +68,7 @@ const commands: Record<string, Command> = {
 
       print('shrey-sh built-ins:', 'out--dim');
       for (const [key, command] of Object.entries(commands)) {
-        print('  ' + pad(key, 11) + command.summary);
+        print('  ' + pad(key, 13) + command.summary);
       }
       print('');
       print('Files live under ' + HOME + '. Try: ls, cat README.txt, tree', 'out--dim');
@@ -476,6 +476,40 @@ const commands: Record<string, Command> = {
           ' is not in the sudoers file. This incident has been reported.',
         'out--warn',
       ),
+  },
+
+  screensaver: {
+    usage: 'screensaver [warp|matrix|bounce]',
+    summary: 'start the screen saver (any input wakes it)',
+    run: ({ args, print }) => {
+      const mode = args[0]?.toLowerCase();
+      if (mode && !['warp', 'matrix', 'bounce'].includes(mode)) {
+        print('screensaver: unknown mode ' + mode + ' (warp, matrix, bounce)', 'out--warn');
+        return;
+      }
+      startScreensaver(mode);
+    },
+  },
+
+  matrix: {
+    usage: 'matrix',
+    summary: 'follow the white rabbit',
+    run: ({ print }) => {
+      print('Wake up, ' + profile.name.split(' ')[0] + '...', 'out--accent');
+      window.setTimeout(() => startScreensaver('matrix'), 600);
+    },
+  },
+
+  barrelroll: {
+    usage: 'barrelroll',
+    summary: 'do a barrel roll',
+    run: () => barrelRoll(),
+  },
+
+  party: {
+    usage: 'party',
+    summary: 'what the Konami code does, for keyboards without arrows',
+    run: () => party(),
   },
 
   clear: {

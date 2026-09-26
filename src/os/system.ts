@@ -4,6 +4,9 @@ interface Handlers {
   openApp: (id: string) => void;
   closeApp: (id: string) => void;
   screen: () => HTMLElement;
+  screensaver: (mode?: string) => void;
+  party: () => void;
+  barrelRoll: () => void;
 }
 
 export type RoomView = 'room' | 'workstation' | 'screen';
@@ -45,6 +48,20 @@ export function openApp(id: string) {
 
 export function closeApp(id: string) {
   handlers?.closeApp(id);
+}
+
+/** Start the screen saver: warp, matrix or bounce, or any one of them. */
+export function startScreensaver(mode?: string) {
+  handlers?.screensaver(mode);
+}
+
+/** Confetti, a fanfare and a barrel roll. */
+export function party() {
+  handlers?.party();
+}
+
+export function barrelRoll() {
+  handlers?.barrelRoll();
 }
 
 /** The screen root — dialogs and menus mount here so they centre correctly. */

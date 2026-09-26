@@ -2,7 +2,7 @@ import type { Audio } from '../experience/Audio';
 import type { Sizes } from '../experience/Sizes';
 import { profile } from '../data/cv';
 import { telemetry } from '../world/telemetry';
-import { SPRING, Spring } from './anim';
+import { reducedMotion, SPRING, Spring } from './anim';
 import { apps, appsById, icons } from './apps';
 import { fileIcon } from './apps/Explorer';
 import { closeContextMenu, openContextMenu } from './ContextMenu';
@@ -11,6 +11,7 @@ import { MenuBar } from './MenuBar';
 import type { BarItem, BarMenu } from './MenuBar';
 import { mountNotifications, notify } from './Notifications';
 import { settings } from './settings';
+import { SAVER_MODES, Screensaver, type SaverMode } from './Screensaver';
 import { Spotlight } from './Spotlight';
 import {
   openPath,
@@ -73,6 +74,14 @@ const MENU_ICONS = {
 
 const DESKTOP_DIR = join(HOME, 'Desktop');
 
+/** ↑ ↑ ↓ ↓ ← → ← → B A */
+const KONAMI = [
+  'arrowup', 'arrowup', 'arrowdown', 'arrowdown',
+  'arrowleft', 'arrowright', 'arrowleft', 'arrowright', 'b', 'a',
+];
+
+const CONFETTI_COLOURS = ['#5fd0ff', '#ffb454', '#6ee7a8', '#b18cff', '#ff8fa3', '#fff27a'];
+
 /** Pinned to the dock whether or not they are running. Membership only — the
  *  dock lays them out in registry order, so `apps` decides the sequence. */
 const DOCK_APPS = [
@@ -114,6 +123,8 @@ export class OS {
   private readonly search: HTMLInputElement;
   private readonly manager: WindowManager;
   private readonly spotlight: Spotlight;
+  private readonly saver: Screensaver;
+  private crt!: HTMLElement;
 
   private selected: string | null = null;
   private timers: number[] = [];
@@ -170,7 +181,20 @@ export class OS {
     );
 
     const crt = el('div', 'crt');
-    crt.append(this.standby, this.boot, this.desktop);
+    this.crt = crt;
+
+    this.saver = new Screensaver(
+      this.root,
+      () => this.state === 'desktop',
+      (active) => {
+        // Dimmer while it runs, so the room's spill light drops with it.
+        if (this.state === 'desktop') this.brightness = active ? 0.45 : 1;
+        telemetry.setGpuLoad(active ? 0.55 : 0);
+      },
+      sizes.quality === 'low' ? 20 : 30,
+    );
+
+    crt.append(this.standby, this.boot, this.desktop, this.saver.element);
 
     this.root.append(
       crt,
@@ -197,6 +221,9 @@ export class OS {
       },
       closeApp: (id) => this.manager.close(id),
       screen: () => this.root,
+      screensaver: (mode) => this.startScreensaver(mode),
+      party: () => this.party(),
+      barrelRoll: () => this.barrelRoll(),
     });
 
     setTerminalKeySound(() => {
@@ -221,6 +248,7 @@ export class OS {
 
     this.bindDesktop();
     this.bindShortcuts();
+    this.bindSecrets();
     this.bindPointer();
     this.renderIcons();
 
@@ -352,7 +380,9 @@ export class OS {
     layer.append(el('p', 'standby__role', profile.role));
 
     const hint = el('p', 'standby__hint');
-    hint.innerHTML = 'PRESS ANY KEY TO BOOT<span class="caret"></span>';
+    // A phone has no key to press; tell it what it can actually do.
+    const touch = window.matchMedia('(hover: none) and (pointer: coarse)').matches;
+    hint.innerHTML = (touch ? 'TAP TO BOOT' : 'PRESS ANY KEY TO BOOT') + '<span class="caret"></span>';
     layer.append(hint);
 
     // The room boots the machine when the camera arrives, but after a shutdown
@@ -864,6 +894,9 @@ export class OS {
             { label: 'About ' + (app?.title ?? 'This Computer'), action: () => openById('credits') },
             { label: 'Settings…', shortcut: '⌘,', action: () => openById('settings') },
             { separator: true },
+            { label: 'Start Screen Saver', action: () => this.startScreensaver() },
+            { label: 'Shut Down…', action: () => this.shutDown() },
+            { separator: true },
             {
               label: 'Hide ' + (app?.title ?? 'Finder'),
               shortcut: '⌘H',
@@ -1355,6 +1388,7 @@ export class OS {
       window.setTimeout(() => {
         this.root.classList.remove('is-switching');
         this.desktop.classList.add('is-visible');
+        this.bloom();
         this.state = 'desktop';
         this.brightness = 1;
         this.audio.chime();
@@ -1379,6 +1413,7 @@ export class OS {
     if (this.state !== 'desktop') return;
     this.state = 'halting';
 
+    this.saver.dismiss();
     this.closeMenus();
     this.manager.closeAll();
     this.audio.degauss();
@@ -1408,22 +1443,142 @@ export class OS {
       );
     }
 
+    // The picture folds to a line, the line to a dot, and the dot hangs in
+    // the phosphor for a moment after the beam has gone — the way a real tube
+    // lets go. Then a beat of black before standby warms back up.
     this.timers.push(
-      window.setTimeout(() => this.root.classList.add('is-switching'), elapsed + 520),
+      window.setTimeout(() => {
+        this.root.classList.add('is-powering-off');
+        this.audio.powerDown();
+        this.brightness = 0.05;
+      }, elapsed + 520),
     );
 
     this.timers.push(
       window.setTimeout(() => {
-        this.root.classList.remove('is-switching');
         this.boot.classList.remove('is-visible');
         this.standby.classList.add('is-visible');
         this.state = 'standby';
-        this.brightness = 0.18;
 
         window.clearInterval(this.clockTimer);
         telemetry.setPowered(false);
-      }, elapsed + 720),
+      }, elapsed + 1180),
     );
+
+    this.timers.push(
+      window.setTimeout(() => {
+        this.root.classList.remove('is-powering-off');
+        this.bloom();
+        this.brightness = 0.18;
+      }, elapsed + 1700),
+    );
+  }
+
+  /** The tube warming up: a bright line that opens out into the picture. */
+  private bloom() {
+    this.root.classList.remove('is-powering-on');
+    // Restart the animation if it is somehow still running.
+    void this.root.offsetWidth;
+    this.root.classList.add('is-powering-on');
+    this.timers.push(
+      window.setTimeout(() => this.root.classList.remove('is-powering-on'), 620),
+    );
+  }
+
+  /* ---------------------------------------------------------------------- */
+  /* Toys                                                                    */
+  /* ---------------------------------------------------------------------- */
+
+  /** Menu bar, terminal and idle timer all come through here. */
+  startScreensaver(mode?: string) {
+    if (this.state !== 'desktop') return;
+    const chosen = SAVER_MODES.includes(mode as SaverMode)
+      ? (mode as SaverMode)
+      : SAVER_MODES[Math.floor(Math.random() * SAVER_MODES.length)];
+    this.closeMenus();
+    this.saver.start(chosen);
+  }
+
+  /** Do a barrel roll. */
+  barrelRoll() {
+    if (reducedMotion || this.crt.classList.contains('is-rolling')) return;
+    this.audio.whoosh();
+    this.crt.classList.add('is-rolling');
+    this.crt.addEventListener(
+      'animationend',
+      () => this.crt.classList.remove('is-rolling'),
+      { once: true },
+    );
+  }
+
+  /** The Konami code, `party` in the terminal, or a good shake of a phone. */
+  party() {
+    if (this.state !== 'desktop') return;
+    this.saver.dismiss();
+    this.audio.jingle();
+    notify('Cheat code accepted', '+30 lives. Nothing else changes.');
+    if (reducedMotion) return;
+    this.barrelRoll();
+    this.timers.push(window.setTimeout(() => this.confetti(), 650));
+  }
+
+  /**
+   * A burst from the dock. Each piece is one Web Animation on the compositor,
+   * and the whole host is removed the moment the last one lands, so nothing
+   * is left re-rastering the glass afterwards.
+   */
+  private confetti() {
+    const host = el('div', 'confetti');
+    this.root.append(host);
+
+    const width = this.root.offsetWidth || 1280;
+    const height = this.root.offsetHeight || 960;
+    const scale = Math.min(width / 1280, 1) * 0.5 + 0.5;
+    const pieces = width < 700 ? 56 : 90;
+    let longest = 0;
+
+    for (let i = 0; i < pieces; i += 1) {
+      const piece = el('span', 'confetti__piece');
+      piece.style.background = CONFETTI_COLOURS[i % CONFETTI_COLOURS.length];
+      piece.style.width = Math.round((6 + Math.random() * 7) * scale) + 'px';
+      piece.style.height = Math.round((10 + Math.random() * 10) * scale) + 'px';
+      if (i % 4 === 0) piece.style.borderRadius = '50%';
+      host.append(piece);
+
+      const angle = (Math.random() - 0.5) * Math.PI * 0.85;
+      const power = (0.55 + Math.random() * 0.45) * height;
+      const dx = Math.sin(angle) * power * 0.9;
+      const peak = -Math.cos(angle) * power;
+      const spin = (Math.random() - 0.5) * 1440;
+      const duration = 1500 + Math.random() * 1100;
+      const delay = Math.random() * 120;
+      longest = Math.max(longest, duration + delay);
+
+      piece.animate(
+        [
+          { transform: 'translate(0, 0) rotate(0deg)', opacity: 1, easing: 'cubic-bezier(0.2, 0.7, 0.4, 1)' },
+          { transform: `translate(${dx * 0.7}px, ${peak}px) rotate(${spin * 0.5}deg)`, opacity: 1, offset: 0.4, easing: 'cubic-bezier(0.5, 0, 0.9, 0.6)' },
+          { transform: `translate(${dx}px, ${peak + height * 0.95}px) rotate(${spin}deg)`, opacity: 0 },
+        ],
+        { duration, delay, fill: 'both' },
+      );
+    }
+
+    this.timers.push(window.setTimeout(() => host.remove(), longest + 80));
+  }
+
+  /** The Konami code, on any keyboard that has arrows. */
+  private bindSecrets() {
+    let progress = 0;
+    window.addEventListener('keydown', (event) => {
+      if (this.state !== 'desktop') return;
+      const key = event.key.toLowerCase();
+      progress = key === KONAMI[progress] ? progress + 1 : key === KONAMI[0] ? 1 : 0;
+      if (progress === KONAMI.length) {
+        progress = 0;
+        this.party();
+      }
+    });
   }
 
 
@@ -1435,6 +1590,8 @@ export class OS {
   /** Told by the experience whenever the room camera lands somewhere new. */
   setView(view: 'room' | 'workstation' | 'screen') {
     this.view = view;
+    // Sitting down, or getting up, is someone at the machine.
+    this.saver.noteInput();
     this.root.dataset.view = view;
     if (this.viewButton) {
       this.viewButton.classList.toggle('is-wide', view !== 'screen');
@@ -1464,6 +1621,7 @@ export class OS {
     window.clearInterval(this.clockTimer);
     for (const stop of this.stopMotion) stop();
     this.stopMotion = [];
+    this.saver.destroy();
     telemetry.setPowered(false);
   }
 }

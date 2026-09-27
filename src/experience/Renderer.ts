@@ -1,14 +1,23 @@
 import {
   ACESFilmicToneMapping,
+  Matrix4,
   PCFShadowMap,
   PCFSoftShadowMap,
+  PerspectiveCamera,
   Scene,
   SRGBColorSpace,
   WebGLRenderer,
 } from 'three';
-import { CSS3DRenderer } from 'three/examples/jsm/renderers/CSS3DRenderer.js';
+import { CSS3DObject, CSS3DRenderer } from 'three/examples/jsm/renderers/CSS3DRenderer.js';
+import { PX_TO_M } from '../world/layout';
 import type { Camera } from './Camera';
 import type { Sizes } from './Sizes';
+
+/**
+ * The CSS pass runs in pixels, not metres: one unit is one CSS pixel on the
+ * glass. See `renderCss` for why.
+ */
+const CSS_UNITS_PER_METRE = 1 / PX_TO_M;
 
 /**
  * Two renderers, one camera.
@@ -22,6 +31,16 @@ import type { Sizes } from './Sizes';
 export class Renderer {
   readonly webgl: WebGLRenderer;
   readonly css: CSS3DRenderer;
+
+  /** The room camera, re-expressed in the CSS pass's pixel units. */
+  private readonly cssCamera = new PerspectiveCamera();
+  private readonly cssScale = new Matrix4().makeScale(
+    CSS_UNITS_PER_METRE,
+    CSS_UNITS_PER_METRE,
+    CSS_UNITS_PER_METRE,
+  );
+  private cssObjects: CSS3DObject[] = [];
+  private readonly saved: Matrix4[] = [];
 
   constructor(
     canvas: HTMLCanvasElement,
@@ -47,6 +66,8 @@ export class Renderer {
     this.webgl.shadowMap.type = sizes.quality === 'high' ? PCFSoftShadowMap : PCFShadowMap;
 
     this.css = new CSS3DRenderer({ element: cssTarget });
+    // Its world matrix is written by hand every frame, below.
+    this.cssCamera.matrixWorldAutoUpdate = false;
 
     this.resize();
     sizes.on(() => this.resize());
@@ -59,8 +80,67 @@ export class Renderer {
   }
 
   update() {
-    this.css.render(this.scene, this.camera.instance);
+    this.renderCss();
     this.webgl.render(this.scene, this.camera.instance);
+  }
+
+  /**
+   * Project the OS onto the glass, with the whole scene scaled up so that the
+   * CSS it produces is well conditioned.
+   *
+   * The room is modelled in metres and the screen element scaled down to fit
+   * it (a 1280px surface times 0.0003). Handed to CSS3DRenderer as it is, that
+   * puts the camera about two CSS pixels in front of the element inside an
+   * 800px perspective, with the element shrunk by three thousand. The maths
+   * still projects correctly, and Chromium draws it — but iOS Safari decides
+   * which parts of a 3D-transformed layer are visible, and which tiles to
+   * paint, in single-precision floats, and with the eye that close to the
+   * plane it gets that wrong: one tile of the desktop lands in a corner of the
+   * glass and the rest of the hole shows the page behind.
+   *
+   * Scaling the world by pixels-per-metre changes nothing about the picture —
+   * both the camera and the object move out by the same factor — but the
+   * element now sits at scale 1, thousands of pixels from the eye, which is
+   * the ordinary case every browser's compositor is built for.
+   *
+   * Only the CSS pass sees the scaled matrices. The object's world matrix is
+   * put back straight afterwards, so raycasting and everything else in the
+   * scene keeps working in metres.
+   */
+  private renderCss() {
+    const camera = this.camera.instance;
+    this.scene.updateMatrixWorld();
+    camera.updateMatrixWorld();
+
+    if (!this.cssObjects.length) {
+      this.scene.traverse((object) => {
+        if (object instanceof CSS3DObject) this.cssObjects.push(object);
+      });
+    }
+
+    // Same lens; only where it stands is rescaled, not how it is turned.
+    const css = this.cssCamera;
+    css.projectionMatrix.copy(camera.projectionMatrix);
+    css.projectionMatrixInverse.copy(camera.projectionMatrixInverse);
+    css.layers.mask = camera.layers.mask;
+    css.matrixWorld.copy(camera.matrixWorld);
+    css.matrixWorld.elements[12] *= CSS_UNITS_PER_METRE;
+    css.matrixWorld.elements[13] *= CSS_UNITS_PER_METRE;
+    css.matrixWorld.elements[14] *= CSS_UNITS_PER_METRE;
+    css.matrixWorldInverse.copy(css.matrixWorld).invert();
+
+    this.cssObjects.forEach((object, index) => {
+      (this.saved[index] ??= new Matrix4()).copy(object.matrixWorld);
+      object.matrixWorld.premultiply(this.cssScale);
+    });
+
+    // Stop the renderer recomputing the world matrices just written.
+    const autoUpdate = this.scene.matrixWorldAutoUpdate;
+    this.scene.matrixWorldAutoUpdate = false;
+    this.css.render(this.scene, css);
+    this.scene.matrixWorldAutoUpdate = autoUpdate;
+
+    this.cssObjects.forEach((object, index) => object.matrixWorld.copy(this.saved[index]));
   }
 
   destroy() {

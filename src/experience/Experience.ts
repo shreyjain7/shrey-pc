@@ -167,8 +167,10 @@ export class Experience {
     telemetry.setPowered(true);
     this.ready = true;
 
-    // The room arrives rather than simply being there.
-    this.camera.arrive();
+    // The room arrives rather than simply being there: a long swoop in from
+    // across the studio. Cut short, not cut out, for anyone who asked for
+    // less motion — a snap to a pose reads worse than a quick glide.
+    this.camera.arrive(reducedMotion ? 1.2 : undefined);
 
     track('experience_started', { quality: this.sizes.quality });
   };

@@ -3,6 +3,9 @@ import type { Sizes } from './Sizes';
 import { ENTRY_CAMERA, IDLE_CAMERA, MONITOR, SCREEN_CENTER, WORKSTATION_CAMERA } from '../world/layout';
 
 const easeInOutCubic = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2);
+/** Holds longer at both ends than the cubic: a dwell, a rush, a settle. */
+const easeInOutQuint = (t: number) => (t < 0.5 ? 16 * t ** 5 : 1 - (-2 * t + 2) ** 5 / 2);
+type Easing = (t: number) => number;
 
 export type CameraMode = 'idle' | 'workstation' | 'focused';
 
@@ -103,6 +106,8 @@ export class Camera {
   private readonly liveTarget = new Vector3();
 
   private onSettled: ((mode: CameraMode) => void) | null = null;
+  /** The curve of the flight in progress. Mode changes use the cubic. */
+  private easing: Easing = easeInOutCubic;
 
   constructor(private sizes: Sizes) {
     this.instance = new PerspectiveCamera(38, sizes.aspect, 0.1, 60);
@@ -322,6 +327,7 @@ export class Camera {
     this.progress = 0;
     this.mode = mode;
     this.dragging = false;
+    this.easing = easeInOutCubic;
     this.onSettled = onSettled ?? null;
   }
 
@@ -334,7 +340,7 @@ export class Camera {
    * throughout, because the live pose is recomputed every frame rather than
    * baked at the start.
    */
-  arrive(duration = 2.8) {
+  arrive(duration = 4.6) {
     this.from.position.copy(ENTRY_CAMERA.position);
     this.from.target.copy(ENTRY_CAMERA.target);
     this.instance.position.copy(ENTRY_CAMERA.position);
@@ -345,6 +351,9 @@ export class Camera {
     this.progress = 0;
     this.duration = duration;
     this.dragging = false;
+    // A long flight wants a long dwell on the wide shot before it commits,
+    // and a soft landing at the desk — the quintic gives both.
+    this.easing = easeInOutQuint;
     this.onSettled = null;
   }
 
@@ -429,7 +438,7 @@ export class Camera {
     this.computeLivePose(elapsed);
 
     if (this.progress < 1) {
-      const t = easeInOutCubic(this.progress);
+      const t = this.easing(this.progress);
       this.livePosition.lerpVectors(this.from.position, this.livePosition, t);
       this.liveTarget.lerpVectors(this.from.target, this.liveTarget, t);
     }

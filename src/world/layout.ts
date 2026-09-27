@@ -87,12 +87,13 @@ export const SCREEN_PX = {
 export const PX_TO_M = MONITOR.screenWidth / SCREEN_PX.width;
 
 /**
- * Where the opening flight begins: back and high enough to hold the whole
- * desk, the chair and the plant at once, which is the shot the setup is built
- * to be seen in before the camera comes down to the machine.
+ * Where the opening flight begins: far back across the studio and high, so
+ * the desk is a small thing half-dissolved in the fog, and the whole way in is
+ * the room resolving around it until the machine fills the frame. About
+ * eleven metres out — past the ground's light pool, inside the dome.
  */
 export const ENTRY_CAMERA = {
-  position: new Vector3(-2.05, 2.4, 3.15),
+  position: new Vector3(-5.6, 4.3, 9.4),
   target: new Vector3(-0.02, 0.94, -0.16),
 };
 

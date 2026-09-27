@@ -172,7 +172,17 @@ export class Experience {
     // less motion — a snap to a pose reads worse than a quick glide.
     this.camera.arrive(reducedMotion ? 1.2 : undefined);
 
-    track('experience_started', { quality: this.sizes.quality });
+    // On a desktop the flight does not stop across the room: it carries on
+    // down to the machine and lands sat at it, the glass filling the view
+    // with the case around it, and the OS boots as it settles. The visitor
+    // is here to use the computer, and this puts them at it without a click.
+    // A phone keeps the room and the tap — its glass is too small to use, so
+    // sitting down there means the fullscreen overlay, which is a choice to
+    // be made rather than made for them.
+    const landing: RoomView = this.sizes.compact ? 'room' : 'screen';
+    if (landing === 'screen') this.setView('screen');
+
+    track('experience_started', { quality: this.sizes.quality, landing });
   };
 
   /**

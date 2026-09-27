@@ -108,6 +108,12 @@ export class Camera {
   private onSettled: ((mode: CameraMode) => void) | null = null;
   /** The curve of the flight in progress. Mode changes use the cubic. */
   private easing: Easing = easeInOutCubic;
+  /**
+   * Set by `arrive` for a `setMode` called in the same breath, so the opening
+   * flight can end at any pose and still be one long flight rather than a
+   * hop to idle and a second hop on. Cleared on the next frame either way.
+   */
+  private arrival: { duration: number; easing: Easing } | null = null;
 
   constructor(private sizes: Sizes) {
     this.instance = new PerspectiveCamera(38, sizes.aspect, 0.1, 60);
@@ -321,13 +327,15 @@ export class Camera {
       return;
     }
 
-    this.duration = DURATIONS[`${this.mode}>${mode}`] ?? 1.2;
+    const arrival = this.arrival;
+    this.arrival = null;
+    this.duration = arrival?.duration ?? DURATIONS[`${this.mode}>${mode}`] ?? 1.2;
+    this.easing = arrival?.easing ?? easeInOutCubic;
     this.from.position.copy(this.instance.position);
     this.from.target.copy(this.lookAt);
     this.progress = 0;
     this.mode = mode;
     this.dragging = false;
-    this.easing = easeInOutCubic;
     this.onSettled = onSettled ?? null;
   }
 
@@ -355,6 +363,7 @@ export class Camera {
     // and a soft landing at the desk — the quintic gives both.
     this.easing = easeInOutQuint;
     this.onSettled = null;
+    this.arrival = { duration, easing: easeInOutQuint };
   }
 
   focus(onSettled?: (mode: CameraMode) => void) {
@@ -420,6 +429,8 @@ export class Camera {
   }
 
   update(delta: number, elapsed: number) {
+    // Only a setMode made before the first frame after arrive() may claim it.
+    this.arrival = null;
     const wasMoving = this.progress < 1;
     this.progress = Math.min(this.progress + delta / this.duration, 1);
 

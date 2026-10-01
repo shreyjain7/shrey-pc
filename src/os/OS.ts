@@ -1,6 +1,7 @@
 import type { Audio } from '../experience/Audio';
 import type { Sizes } from '../experience/Sizes';
 import { profile } from '../data/cv';
+import { isCompactScreen } from '../world/layout';
 import { telemetry } from '../world/telemetry';
 import { reducedMotion, SPRING, Spring } from './anim';
 import { apps, appsById, icons } from './apps';
@@ -139,7 +140,7 @@ export class OS {
 
   constructor(
     private audio: Audio,
-    sizes: Sizes,
+    private readonly sizes: Sizes,
   ) {
     this.root = el('div', 'screen');
 
@@ -255,9 +256,15 @@ export class OS {
     this.stopMotion.push(this.manager.bindParallax(this.desktop));
   }
 
+  /**
+   * The one-window-at-a-time layout is for a small surface, not a small
+   * viewport: a phone's 560px glass, or a phone-sized fullscreen panel. A
+   * tablet sees the full 1280px desktop on its glass and gets the desktop.
+   */
   private applyLayout(sizes: Sizes) {
-    this.root.classList.toggle('is-compact', sizes.compact);
-    this.manager.setCompact(sizes.compact);
+    const compact = isCompactScreen() || (this.root.classList.contains('is-overlay') && sizes.compact);
+    this.root.classList.toggle('is-compact', compact);
+    this.manager.setCompact(compact);
     this.manager.relayout();
   }
 
@@ -1611,6 +1618,7 @@ export class OS {
    */
   setOverlay(on: boolean) {
     this.root.classList.toggle('is-overlay', on);
+    this.applyLayout(this.sizes);
     // The screen's coordinate box just changed size; the windows in it have
     // to be re-fitted or they are clipped by the new surface.
     requestAnimationFrame(() => this.manager.relayout());

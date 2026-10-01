@@ -4,7 +4,7 @@ import { links, profile } from '../data/cv';
 import { reducedMotion } from '../os/anim';
 import { OS } from '../os/OS';
 import { registerScene, type RoomView } from '../os/system';
-import { SCREEN_CENTER } from '../world/layout';
+import { SCREEN_CENTER, useCompactScreen } from '../world/layout';
 import { telemetry } from '../world/telemetry';
 import { World } from '../world/World';
 import { Audio } from './Audio';
@@ -41,7 +41,7 @@ export class Experience {
   private ready = false;
   /**
    * When a full-bleed overlay went up, in performance.now() ms.
-   * Once it has lifted in, it covers the whole scene, and drawing a room nobody
+   * Once it has faded in, it covers the whole scene, and drawing a room nobody
    * can see is a phone's battery and its main thread spent for nothing.
    */
   private coveredSince = 0;
@@ -65,6 +65,10 @@ export class Experience {
     const canvas = document.querySelector('#webgl') as HTMLCanvasElement;
     const cssTarget = document.querySelector('#css') as HTMLElement;
     this.ui = document.querySelector('#ui') as HTMLElement;
+
+    // Settled before anything is built: the OS lays itself out to the surface,
+    // and the monitor bakes its scale into the CSS3D object.
+    useCompactScreen(this.sizes.phone);
 
     this.camera = new Camera(this.sizes);
     this.os = new OS(this.audio, this.sizes);
@@ -172,17 +176,14 @@ export class Experience {
     // less motion — a snap to a pose reads worse than a quick glide.
     this.camera.arrive(reducedMotion ? 1.2 : undefined);
 
-    // On a desktop the flight does not stop across the room: it carries on
-    // down to the machine and lands sat at it, the glass filling the view
-    // with the case around it, and the OS boots as it settles. The visitor
-    // is here to use the computer, and this puts them at it without a click.
-    // A phone keeps the room and the tap — its glass is too small to use, so
-    // sitting down there means the fullscreen overlay, which is a choice to
-    // be made rather than made for them.
-    const landing: RoomView = this.sizes.compact ? 'room' : 'screen';
-    if (landing === 'screen') this.setView('screen');
+    // The flight does not stop across the room: it carries on down to the
+    // machine and lands sat at it, the glass filling the view with the case
+    // around it, and the OS boots as it settles. The visitor is here to use
+    // the computer, and this puts them at it without a click — on a phone as
+    // much as on a laptop, since the phone now has a surface sized for it.
+    this.setView('screen');
 
-    track('experience_started', { quality: this.sizes.quality, landing });
+    track('experience_started', { quality: this.sizes.quality, phone: this.sizes.phone });
   };
 
   /**
@@ -247,8 +248,8 @@ export class Experience {
    *  - **workstation** — pulled back so the tower, the desk and the CRT are
    *    all in frame. The OS lifts off the glass into a panel docked to the
    *    right, so you can keep using it *while watching the machine run it*.
-   *  - **screen** — square on the glass, the OS filling the view. On a phone
-   *    it leaves the 3D layer entirely and runs at true 1:1 pixels.
+   *  - **screen** — square on the glass, the OS filling the view with the
+   *    case around it, on every device. Pinch or ctrl-scroll to get closer.
    */
   private setView(view: RoomView) {
     if (!this.ready || view === this.view) return;
@@ -288,10 +289,11 @@ export class Experience {
 
     this.audio.whoosh();
     this.camera.setMode('focused', () => {
-      // Back on the glass — unless this is a phone, where the glass is too
-      // small to read and the OS stays in its fullscreen overlay.
-      if (this.sizes.compact) this.attachOverlay('phone');
-      else this.detachOverlay();
+      // On the glass, on every device. A phone used to lift the OS into a
+      // flat fullscreen panel, which made it readable and made the machine
+      // disappear. It now has a surface sized for its glass instead, and
+      // pinching brings the camera as close as reading needs.
+      this.detachOverlay();
 
       this.os.setInteractive(true);
       this.os.powerOn();
@@ -302,54 +304,15 @@ export class Experience {
   }
 
   /** Lift the OS off the glass and into a screen-space panel. */
-  private attachOverlay(kind: 'workstation' | 'phone') {
-    // Where the glass is on screen, measured before the OS leaves it.
-    const glass = kind === 'phone' && this.os.root.parentElement === this.mount
-      ? this.mount.getBoundingClientRect()
-      : null;
-
+  private attachOverlay(kind: 'workstation') {
     if (this.os.root.parentElement !== this.overlay) this.overlay.append(this.os.root);
     this.os.setOverlay(true);
     document.body.classList.add('is-overlay');
     this.overlay.dataset.kind = kind;
-    // The phone overlay always goes edge to edge; the workstation panel only
-    // does below the width where style.css stops docking it to one side.
-    const fullBleed = kind === 'phone' || window.matchMedia('(max-width: 820px)').matches;
+    // Below the width where style.css stops docking the panel to one side, it
+    // goes edge to edge and the room behind it cannot be seen.
+    const fullBleed = window.matchMedia('(max-width: 820px)').matches;
     this.coveredSince = fullBleed ? performance.now() : 0;
-
-    if (glass) this.liftOff(glass);
-  }
-
-  /**
-   * The phone's hand-off from the glass to the fullscreen overlay.
-   *
-   * It used to be a cross-fade, which reads as the page swapping one picture
-   * for another. Instead the overlay starts clipped to exactly the rectangle
-   * the glass occupied on screen — so for a frame nothing appears to change —
-   * and then opens outward to the edges, as if the picture had been lifted
-   * off the tube and into the hand.
-   */
-  private liftOff(glass: DOMRect) {
-    if (reducedMotion || glass.width < 40 || glass.height < 30) return;
-
-    const box = this.overlay.getBoundingClientRect();
-    const clamp = (value: number, max: number) => Math.min(Math.max(value, 0), max);
-    const top = clamp(glass.top - box.top, box.height);
-    const bottom = clamp(box.bottom - glass.bottom, box.height);
-    const left = clamp(glass.left - box.left, box.width);
-    const right = clamp(box.right - glass.right, box.width);
-
-    this.overlay.animate(
-      [
-        {
-          opacity: 1,
-          clipPath: `inset(${top}px ${right}px ${bottom}px ${left}px round 14px)`,
-          transform: 'scale(0.985)',
-        },
-        { opacity: 1, clipPath: 'inset(0px 0px 0px 0px round 0px)', transform: 'none' },
-      ],
-      { duration: 620, easing: 'cubic-bezier(0.22, 1, 0.36, 1)' },
-    );
   }
 
   /** Put it back on the glass. */
@@ -708,9 +671,9 @@ export class Experience {
     this.glow = MathUtils.damp(this.glow, target, 3.5, delta);
     this.world.setGlow(this.glow);
 
-    // The overlay's lift-off is 620ms; after that nothing of the room shows, so
+    // The overlay's fade is 320ms; after that nothing of the room shows, so
     // stop drawing it. The case cam has its own renderer and keeps running.
-    const covered = this.coveredSince > 0 && performance.now() - this.coveredSince > 700;
+    const covered = this.coveredSince > 0 && performance.now() - this.coveredSince > 450;
     if (!covered) this.renderer.update();
     this.updateCaseCam(delta);
     this.updateTelemetryPanel(delta);

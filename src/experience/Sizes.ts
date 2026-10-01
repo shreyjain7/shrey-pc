@@ -18,6 +18,11 @@ export class Sizes {
   compact = false;
   /** Taller than wide — the 4:3 glass has to be fitted to width instead. */
   portrait = false;
+  /**
+   * A phone, in either orientation: the short side is under 600px. Decides
+   * the size of the OS surface, which is fixed for the life of the page.
+   */
+  phone = false;
   quality: Quality = 'high';
 
   private listeners = new Set<Listener>();
@@ -33,15 +38,20 @@ export class Sizes {
   }
 
   private measure() {
-    // visualViewport is the honest size on mobile once browser chrome moves.
-    this.width = Math.round(window.visualViewport?.width ?? window.innerWidth);
-    this.height = Math.round(window.visualViewport?.height ?? window.innerHeight);
+    // visualViewport is the honest size on mobile once browser chrome moves —
+    // but it also shrinks when the page itself is pinch-zoomed, and sizing the
+    // canvas to that leaves the room drawn into one corner of a zoomed page.
+    // Multiplying the scale back out gives the layout size in both cases.
+    const viewport = window.visualViewport;
+    this.width = Math.round(viewport ? viewport.width * viewport.scale : window.innerWidth);
+    this.height = Math.round(viewport ? viewport.height * viewport.scale : window.innerHeight);
     this.aspect = this.width / Math.max(this.height, 1);
     this.portrait = this.aspect < 1;
 
     const coarse = window.matchMedia('(pointer: coarse)').matches;
     this.touch = coarse || this.width < 900;
     this.compact = this.width < 820 || (coarse && this.width < 1100);
+    this.phone = Math.min(this.width, this.height) < 600;
 
     this.quality = this.detectQuality(coarse);
 

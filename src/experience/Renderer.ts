@@ -9,15 +9,10 @@ import {
   WebGLRenderer,
 } from 'three';
 import { CSS3DObject, CSS3DRenderer } from 'three/examples/jsm/renderers/CSS3DRenderer.js';
-import { PX_TO_M } from '../world/layout';
+import { pxToM } from '../world/layout';
 import type { Camera } from './Camera';
 import type { Sizes } from './Sizes';
 
-/**
- * The CSS pass runs in pixels, not metres: one unit is one CSS pixel on the
- * glass. See `renderCss` for why.
- */
-const CSS_UNITS_PER_METRE = 1 / PX_TO_M;
 
 /**
  * Two renderers, one camera.
@@ -34,11 +29,7 @@ export class Renderer {
 
   /** The room camera, re-expressed in the CSS pass's pixel units. */
   private readonly cssCamera = new PerspectiveCamera();
-  private readonly cssScale = new Matrix4().makeScale(
-    CSS_UNITS_PER_METRE,
-    CSS_UNITS_PER_METRE,
-    CSS_UNITS_PER_METRE,
-  );
+  private readonly cssScale = new Matrix4();
   private cssObjects: CSS3DObject[] = [];
   private readonly saved: Matrix4[] = [];
 
@@ -109,6 +100,10 @@ export class Renderer {
    */
   private renderCss() {
     const camera = this.camera.instance;
+    // The CSS pass runs in pixels, not metres: one unit is one CSS pixel on
+    // the glass, whichever size of surface this device was given.
+    const unitsPerMetre = 1 / pxToM();
+    this.cssScale.makeScale(unitsPerMetre, unitsPerMetre, unitsPerMetre);
     this.scene.updateMatrixWorld();
     camera.updateMatrixWorld();
 
@@ -124,9 +119,9 @@ export class Renderer {
     css.projectionMatrixInverse.copy(camera.projectionMatrixInverse);
     css.layers.mask = camera.layers.mask;
     css.matrixWorld.copy(camera.matrixWorld);
-    css.matrixWorld.elements[12] *= CSS_UNITS_PER_METRE;
-    css.matrixWorld.elements[13] *= CSS_UNITS_PER_METRE;
-    css.matrixWorld.elements[14] *= CSS_UNITS_PER_METRE;
+    css.matrixWorld.elements[12] *= unitsPerMetre;
+    css.matrixWorld.elements[13] *= unitsPerMetre;
+    css.matrixWorld.elements[14] *= unitsPerMetre;
     css.matrixWorldInverse.copy(css.matrixWorld).invert();
 
     this.cssObjects.forEach((object, index) => {

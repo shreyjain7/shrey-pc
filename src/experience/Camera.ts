@@ -12,6 +12,14 @@ export type CameraMode = 'idle' | 'workstation' | 'focused';
 /** How far the dolly may travel either side of a pose's authored distance. */
 const ZOOM_MIN = 0.52;
 const ZOOM_MAX = 2.4;
+/**
+ * At the screen the dolly may go much closer: that is where zooming is for
+ * reading, and the view pans to keep whatever is under the cursor (or between
+ * the fingers) where it was, so getting close never loses your place.
+ */
+const ZOOM_MIN_FOCUSED = 0.28;
+/** How far past the glass's edge a zoomed-in view may pan, as a fraction. */
+const PAN_SLACK = 0.06;
 
 /** How far the user may swing the view away from the resting pose. */
 const AZIMUTH_LIMIT = MathUtils.degToRad(34);
@@ -91,6 +99,16 @@ export class Camera {
    */
   private zoom = 1;
   private zoomTarget = 1;
+  /**
+   * At the screen only: how far the view has slid across the glass, in metres,
+   * so a zoomed-in camera can look at one corner of the desktop.
+   */
+  private pan = { x: 0, y: 0 };
+  private panTarget = { x: 0, y: 0 };
+  /** The midpoint of a two-finger pinch, for panning with it. */
+  private pinchMid: { x: number; y: number } | null = null;
+  /** Safari's trackpad pinch: the zoom when the gesture began. */
+  private gestureFrom = 0;
   /** Live pointers, so two of them can be measured against each other. */
   private readonly touches = new Map<number, { x: number; y: number }>();
   private pinchFrom = 0;
@@ -136,6 +154,8 @@ export class Camera {
     window.addEventListener('pointercancel', this.onPointerUp);
     window.addEventListener('keydown', this.onKeyDown);
     window.addEventListener('wheel', this.onWheel, { passive: false });
+    document.addEventListener('gesturestart', this.onGestureStart, { passive: false });
+    document.addEventListener('gesturechange', this.onGestureChange, { passive: false });
   }
 
   /* ---------------------------------------------------------------------- */
@@ -150,41 +170,119 @@ export class Camera {
    * the gesture.
    */
   private onWheel = (event: WheelEvent) => {
+    // A trackpad pinch arrives as a wheel with ctrlKey set, wherever it lands.
+    // It always belongs to the camera: left to the browser, it zooms the whole
+    // page and the room ends up drawn into one corner of it.
+    const pinch = event.ctrlKey;
     const target = event.target;
-    if (target instanceof Element && target.closest('.screen')) return;
+    if (!pinch && target instanceof Element && target.closest('.screen')) return;
 
     event.preventDefault();
-    // Multiplicative, so a notch feels the same close up as far away.
-    this.zoomTarget = MathUtils.clamp(
-      this.zoomTarget * Math.exp(event.deltaY * 0.0012),
-      ZOOM_MIN,
-      ZOOM_MAX,
+    // Multiplicative, so a notch feels the same close up as far away. A pinch
+    // reports far smaller deltas than a wheel notch, so it is scaled up.
+    this.zoomAt(
+      this.zoomTarget * Math.exp(event.deltaY * (pinch ? 0.01 : 0.0012)),
+      event.clientX,
+      event.clientY,
     );
   };
+
+  /**
+   * Safari's trackpad pinch. iOS fires these alongside the pointer events the
+   * pinch below already reads, so they only count when no finger is down.
+   */
+  private onGestureStart = (event: Event) => {
+    event.preventDefault();
+    this.gestureFrom = this.touches.size ? 0 : this.zoomTarget;
+  };
+
+  private onGestureChange = (event: Event) => {
+    event.preventDefault();
+    const gesture = event as Event & { scale?: number; clientX?: number; clientY?: number };
+    if (!this.gestureFrom || !gesture.scale) return;
+    this.zoomAt(
+      this.gestureFrom / gesture.scale,
+      gesture.clientX ?? this.sizes.width / 2,
+      gesture.clientY ?? this.sizes.height / 2,
+    );
+  };
+
+  /** How close the dolly may get here. */
+  private get zoomFloor() {
+    return this.mode === 'focused' ? ZOOM_MIN_FOCUSED : ZOOM_MIN;
+  }
+
+  /**
+   * Dolly to `next`, keeping the point under (x, y) on screen where it was.
+   *
+   * Away from the screen the room zooms about its centre, as it always has.
+   * At the screen, the view also slides across the glass by however far that
+   * point would otherwise have moved — the way a map zooms toward the cursor.
+   */
+  private zoomAt(next: number, x: number, y: number) {
+    const from = this.zoomTarget;
+    const to = MathUtils.clamp(next, this.zoomFloor, ZOOM_MAX);
+    this.zoomTarget = to;
+    if (this.mode !== 'focused' || from === to) return;
+
+    const ndcX = (x / this.sizes.width) * 2 - 1;
+    const ndcY = -((y / this.sizes.height) * 2 - 1);
+    const [halfW0, halfH0] = this.halfExtents(from);
+    const [halfW1, halfH1] = this.halfExtents(to);
+    this.panTarget.x += ndcX * (halfW0 - halfW1);
+    this.panTarget.y += ndcY * (halfH0 - halfH1);
+  }
+
+  /** Half the visible width and height on the glass at a given zoom, in metres. */
+  private halfExtents(zoom: number): [number, number] {
+    const distance = (this.focusPosition.z - SCREEN_CENTER.z) * zoom;
+    const half = Math.tan(MathUtils.degToRad(this.instance.fov) / 2) * distance;
+    return [half * this.instance.aspect, half];
+  }
+
+  /**
+   * Keep a zoomed-in view over the glass. Once zoomed out far enough to see
+   * all of it, there is nothing to pan to, and it drifts back to centre.
+   */
+  private clampPan() {
+    const [halfW, halfH] = this.halfExtents(this.zoomTarget);
+    const reachX = Math.max((MONITOR.screenWidth / 2) * (1 + PAN_SLACK) - halfW, 0);
+    const reachY = Math.max((MONITOR.screenHeight / 2) * (1 + PAN_SLACK) - halfH, 0);
+    this.panTarget.x = MathUtils.clamp(this.panTarget.x, -reachX, reachX);
+    this.panTarget.y = MathUtils.clamp(this.panTarget.y, -reachY, reachY);
+  }
 
   /** Pinch, measured off whichever two pointers are down. */
   private pinch() {
     if (this.touches.size < 2) {
       this.pinchFrom = 0;
+      this.pinchMid = null;
       return false;
     }
 
     const [a, b] = [...this.touches.values()];
     const spread = Math.hypot(a.x - b.x, a.y - b.y);
+    const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
 
-    if (!this.pinchFrom) {
+    if (!this.pinchFrom || !this.pinchMid) {
       this.pinchFrom = spread;
+      this.pinchMid = mid;
       return true;
     }
 
     if (spread > 0) {
-      this.zoomTarget = MathUtils.clamp(
-        this.zoomTarget * (this.pinchFrom / spread),
-        ZOOM_MIN,
-        ZOOM_MAX,
-      );
+      this.zoomAt(this.zoomTarget * (this.pinchFrom / spread), mid.x, mid.y);
       this.pinchFrom = spread;
     }
+
+    // Two fingers moving together drag the glass along with them.
+    if (this.mode === 'focused') {
+      const [, halfH] = this.halfExtents(this.zoomTarget);
+      const metresPerPixel = (halfH * 2) / this.sizes.height;
+      this.panTarget.x -= (mid.x - this.pinchMid.x) * metresPerPixel;
+      this.panTarget.y += (mid.y - this.pinchMid.y) * metresPerPixel;
+    }
+    this.pinchMid = mid;
     return true;
   }
 
@@ -208,7 +306,10 @@ export class Camera {
 
   private onPointerUp = (event: PointerEvent) => {
     this.touches.delete(event.pointerId);
-    if (this.touches.size < 2) this.pinchFrom = 0;
+    if (this.touches.size < 2) {
+      this.pinchFrom = 0;
+      this.pinchMid = null;
+    }
     if (this.dragPointer !== event.pointerId) return;
     this.dragging = false;
     this.dragPointer = null;
@@ -270,6 +371,7 @@ export class Camera {
   resetView() {
     this.orbitTarget = { azimuth: 0, polar: 0 };
     this.zoomTarget = 1;
+    this.panTarget = { x: 0, y: 0 };
   }
 
   get isDefaultView() {
@@ -300,7 +402,7 @@ export class Camera {
     // while the OS is being used, which is the whole point of putting the
     // thing in a room. A phone has no pixels to spare, so it still fits tight,
     // and scroll or pinch overrides either way.
-    const margin = this.sizes.compact ? 1.02 : 1.46;
+    const margin = this.sizes.phone ? 1.16 : 1.46;
     const fitHeight = (MONITOR.screenHeight * margin) / 2 / Math.tan(vFov / 2);
     const hFov = 2 * Math.atan(Math.tan(vFov / 2) * this.instance.aspect);
     const fitWidth = (MONITOR.screenWidth * margin) / 2 / Math.tan(hFov / 2);
@@ -336,6 +438,9 @@ export class Camera {
     this.progress = 0;
     this.mode = mode;
     this.dragging = false;
+    // The glass allows a much closer dolly than the room. Leaving it zoomed
+    // right in must not carry that into a room pose, inside the desk.
+    this.zoomTarget = Math.max(this.zoomTarget, this.zoomFloor);
     this.onSettled = onSettled ?? null;
   }
 
@@ -397,11 +502,11 @@ export class Camera {
       // Dolly along the screen's own normal, so zooming out at the glass backs
       // away from it squarely rather than swinging round.
       this.livePosition.set(
-        SCREEN_CENTER.x,
-        SCREEN_CENTER.y,
+        SCREEN_CENTER.x + this.pan.x,
+        SCREEN_CENTER.y + this.pan.y,
         SCREEN_CENTER.z + (this.focusPosition.z - SCREEN_CENTER.z) * this.zoom,
       );
-      this.liveTarget.copy(SCREEN_CENTER);
+      this.liveTarget.set(SCREEN_CENTER.x + this.pan.x, SCREEN_CENTER.y + this.pan.y, SCREEN_CENTER.z);
       return;
     }
 
@@ -437,6 +542,11 @@ export class Camera {
     this.orbit.azimuth = MathUtils.damp(this.orbit.azimuth, this.orbitTarget.azimuth, 5, delta);
     this.orbit.polar = MathUtils.damp(this.orbit.polar, this.orbitTarget.polar, 5, delta);
     this.zoom = MathUtils.damp(this.zoom, this.zoomTarget, 6, delta);
+    // Pan only means anything at the glass; anywhere else it eases home.
+    if (this.mode === 'focused') this.clampPan();
+    else this.panTarget = { x: 0, y: 0 };
+    this.pan.x = MathUtils.damp(this.pan.x, this.panTarget.x, 6, delta);
+    this.pan.y = MathUtils.damp(this.pan.y, this.panTarget.y, 6, delta);
 
     // Parallax stands down while the user is actively dragging.
     const parallaxWeight = this.dragging ? 0 : 1;
@@ -471,5 +581,8 @@ export class Camera {
     window.removeEventListener('pointerup', this.onPointerUp);
     window.removeEventListener('pointercancel', this.onPointerUp);
     window.removeEventListener('keydown', this.onKeyDown);
+    window.removeEventListener('wheel', this.onWheel);
+    document.removeEventListener('gesturestart', this.onGestureStart);
+    document.removeEventListener('gesturechange', this.onGestureChange);
   }
 }

@@ -19,7 +19,7 @@ import { smudgeTexture, vignetteTexture } from './textures';
 import {
   MONITOR,
   MONITOR_BOTTOM,
-  PX_TO_M,
+  pxToM,
   SCREEN_CENTER,
   SCREEN_PX,
   SCREEN_Z,
@@ -233,7 +233,7 @@ export class Monitor {
 
     const cssObject = new CSS3DObject(screenElement);
     cssObject.position.copy(SCREEN_CENTER);
-    cssObject.scale.setScalar(PX_TO_M);
+    cssObject.scale.setScalar(pxToM());
     this.group.add(cssObject);
 
     /* --- Glass -------------------------------------------------------------- */

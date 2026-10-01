@@ -18,6 +18,16 @@ const ZOOM_MAX = 2.4;
  * the fingers) where it was, so getting close never loses your place.
  */
 const ZOOM_MIN_FOCUSED = 0.28;
+/**
+ * A phone sees the same 1280px desktop as a laptop on a glass a quarter the
+ * size, so it is allowed about twice as close again.
+ */
+const ZOOM_MIN_FOCUSED_PHONE = 0.14;
+/** How far below the glass a portrait screen aims at rest, in metres. */
+const PORTRAIT_DROP = 0.13;
+/** Where a double-tap takes the view, as a fraction of the resting distance. */
+const DOUBLE_TAP_ZOOM = 0.4;
+const DOUBLE_TAP_ZOOM_PHONE = 0.3;
 /** How far past the glass's edge a zoomed-in view may pan, as a fraction. */
 const PAN_SLACK = 0.06;
 
@@ -109,6 +119,9 @@ export class Camera {
   private pinchMid: { x: number; y: number } | null = null;
   /** Safari's trackpad pinch: the zoom when the gesture began. */
   private gestureFrom = 0;
+  /** For telling a tap from a drag, and a double-tap from two taps. */
+  private tapStart: { x: number; y: number; time: number } | null = null;
+  private lastTap: { x: number; y: number; time: number } | null = null;
   /** Live pointers, so two of them can be measured against each other. */
   private readonly touches = new Map<number, { x: number; y: number }>();
   private pinchFrom = 0;
@@ -209,7 +222,8 @@ export class Camera {
 
   /** How close the dolly may get here. */
   private get zoomFloor() {
-    return this.mode === 'focused' ? ZOOM_MIN_FOCUSED : ZOOM_MIN;
+    if (this.mode !== 'focused') return ZOOM_MIN;
+    return this.sizes.phone ? ZOOM_MIN_FOCUSED_PHONE : ZOOM_MIN_FOCUSED;
   }
 
   /**
@@ -294,6 +308,10 @@ export class Camera {
   private onPointerDown = (event: PointerEvent) => {
     if (event.pointerType === 'touch') {
       this.touches.set(event.pointerId, { x: event.clientX, y: event.clientY });
+      this.tapStart =
+        this.touches.size === 1
+          ? { x: event.clientX, y: event.clientY, time: performance.now() }
+          : null;
       // A second finger means a pinch, not a swing.
       if (this.touches.size > 1) this.dragging = false;
     }
@@ -305,6 +323,7 @@ export class Camera {
   };
 
   private onPointerUp = (event: PointerEvent) => {
+    if (event.pointerType === 'touch' && event.type === 'pointerup') this.detectDoubleTap(event);
     this.touches.delete(event.pointerId);
     if (this.touches.size < 2) {
       this.pinchFrom = 0;
@@ -361,6 +380,43 @@ export class Camera {
     this.orbitTarget.polar = MathUtils.clamp(this.orbitTarget.polar, -POLAR_LIMIT, POLAR_LIMIT);
   };
 
+  /**
+   * Double-tap at the screen zooms toward the spot, and again zooms back out —
+   * what every phone already does with a page, and the quickest way to read
+   * a desktop that is the same size as a laptop's on a much smaller glass.
+   * The taps still reach the OS beneath, as taps on a phone always do.
+   */
+  private detectDoubleTap(event: PointerEvent) {
+    const start = this.tapStart;
+    this.tapStart = null;
+    if (!start || this.touches.size > 1) return;
+
+    const now = performance.now();
+    const moved = Math.hypot(event.clientX - start.x, event.clientY - start.y);
+    if (moved > 12 || now - start.time > 300) {
+      this.lastTap = null;
+      return;
+    }
+
+    const last = this.lastTap;
+    const isDouble =
+      last && now - last.time < 320 && Math.hypot(event.clientX - last.x, event.clientY - last.y) < 36;
+    if (!isDouble) {
+      this.lastTap = { x: event.clientX, y: event.clientY, time: now };
+      return;
+    }
+
+    this.lastTap = null;
+    if (this.mode !== 'focused' || this.progress < 1) return;
+
+    if (this.zoomTarget > 0.75) {
+      this.zoomAt(this.sizes.phone ? DOUBLE_TAP_ZOOM_PHONE : DOUBLE_TAP_ZOOM, event.clientX, event.clientY);
+    } else {
+      this.zoomTarget = 1;
+      this.panTarget = { x: 0, y: 0 };
+    }
+  }
+
   /** Fed from the device's orientation; zero when there is none. */
   setTilt(x: number, y: number) {
     this.tiltTarget.x = MathUtils.clamp(x, -1, 1);
@@ -400,12 +456,16 @@ export class Camera {
     // Sitting down no longer means the glass swallowing the frame. The margin
     // leaves the beige around it — the case, the chin, the slot — in shot
     // while the OS is being used, which is the whole point of putting the
-    // thing in a room. A phone has no pixels to spare, so it still fits tight,
-    // and scroll or pinch overrides either way.
-    const margin = this.sizes.phone ? 1.16 : 1.46;
+    // thing in a room. Pinch, ctrl-scroll or double-tap override it.
+    //
+    // A portrait phone is fitted on width instead, and given room for the
+    // whole bezel and a strip of the room either side of it, so it lands on
+    // the same picture a laptop does — the machine, not a glass edge to edge.
+    const margin = 1.46;
+    const widthMargin = this.sizes.portrait ? (MONITOR.bodyWidth / MONITOR.screenWidth) * 1.28 : margin;
     const fitHeight = (MONITOR.screenHeight * margin) / 2 / Math.tan(vFov / 2);
     const hFov = 2 * Math.atan(Math.tan(vFov / 2) * this.instance.aspect);
-    const fitWidth = (MONITOR.screenWidth * margin) / 2 / Math.tan(hFov / 2);
+    const fitWidth = (MONITOR.screenWidth * widthMargin) / 2 / Math.tan(hFov / 2);
 
     this.focusPosition.set(
       SCREEN_CENTER.x,
@@ -501,12 +561,18 @@ export class Camera {
     if (this.mode === 'focused') {
       // Dolly along the screen's own normal, so zooming out at the glass backs
       // away from it squarely rather than swinging round.
+      // A tall screen has far more height than the glass needs, so at rest it
+      // aims a little low and the whole machine — monitor, unit, keyboard —
+      // sits in the middle instead of the glass with bare wall above it. The
+      // bias fades out as the view closes in on the glass.
+      const settle = this.sizes.portrait ? MathUtils.clamp((this.zoom - 0.5) / 0.5, 0, 1) : 0;
+      const y = SCREEN_CENTER.y + this.pan.y - PORTRAIT_DROP * settle;
       this.livePosition.set(
         SCREEN_CENTER.x + this.pan.x,
-        SCREEN_CENTER.y + this.pan.y,
+        y,
         SCREEN_CENTER.z + (this.focusPosition.z - SCREEN_CENTER.z) * this.zoom,
       );
-      this.liveTarget.set(SCREEN_CENTER.x + this.pan.x, SCREEN_CENTER.y + this.pan.y, SCREEN_CENTER.z);
+      this.liveTarget.set(SCREEN_CENTER.x + this.pan.x, y, SCREEN_CENTER.z);
       return;
     }
 

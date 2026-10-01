@@ -1,7 +1,6 @@
 import type { Audio } from '../experience/Audio';
 import type { Sizes } from '../experience/Sizes';
 import { profile } from '../data/cv';
-import { isCompactScreen } from '../world/layout';
 import { telemetry } from '../world/telemetry';
 import { reducedMotion, SPRING, Spring } from './anim';
 import { apps, appsById, icons } from './apps';
@@ -258,11 +257,11 @@ export class OS {
 
   /**
    * The one-window-at-a-time layout is for a small surface, not a small
-   * viewport: a phone's 560px glass, or a phone-sized fullscreen panel. A
-   * tablet sees the full 1280px desktop on its glass and gets the desktop.
+   * viewport. On the glass every device sees the full 1280px desktop, the
+   * same one; only a phone-sized fullscreen panel gets the compact layout.
    */
   private applyLayout(sizes: Sizes) {
-    const compact = isCompactScreen() || (this.root.classList.contains('is-overlay') && sizes.compact);
+    const compact = this.root.classList.contains('is-overlay') && sizes.compact;
     this.root.classList.toggle('is-compact', compact);
     this.manager.setCompact(compact);
     this.manager.relayout();

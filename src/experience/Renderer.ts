@@ -9,7 +9,7 @@ import {
   WebGLRenderer,
 } from 'three';
 import { CSS3DObject, CSS3DRenderer } from 'three/examples/jsm/renderers/CSS3DRenderer.js';
-import { pxToM } from '../world/layout';
+import { PX_TO_M } from '../world/layout';
 import type { Camera } from './Camera';
 import type { Sizes } from './Sizes';
 
@@ -101,8 +101,8 @@ export class Renderer {
   private renderCss() {
     const camera = this.camera.instance;
     // The CSS pass runs in pixels, not metres: one unit is one CSS pixel on
-    // the glass, whichever size of surface this device was given.
-    const unitsPerMetre = 1 / pxToM();
+    // the glass.
+    const unitsPerMetre = 1 / PX_TO_M;
     this.cssScale.makeScale(unitsPerMetre, unitsPerMetre, unitsPerMetre);
     this.scene.updateMatrixWorld();
     camera.updateMatrixWorld();

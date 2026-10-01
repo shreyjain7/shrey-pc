@@ -2,9 +2,10 @@ import { MathUtils, PerspectiveCamera, Scene, Vector3, WebGLRenderer } from 'thr
 import { initAnalytics, track } from '../analytics';
 import { links, profile } from '../data/cv';
 import { reducedMotion } from '../os/anim';
+import { notify } from '../os/Notifications';
 import { OS } from '../os/OS';
 import { registerScene, type RoomView } from '../os/system';
-import { SCREEN_CENTER, useCompactScreen } from '../world/layout';
+import { SCREEN_CENTER } from '../world/layout';
 import { telemetry } from '../world/telemetry';
 import { World } from '../world/World';
 import { Audio } from './Audio';
@@ -65,10 +66,6 @@ export class Experience {
     const canvas = document.querySelector('#webgl') as HTMLCanvasElement;
     const cssTarget = document.querySelector('#css') as HTMLElement;
     this.ui = document.querySelector('#ui') as HTMLElement;
-
-    // Settled before anything is built: the OS lays itself out to the surface,
-    // and the monitor bakes its scale into the CSS3D object.
-    useCompactScreen(this.sizes.phone);
 
     this.camera = new Camera(this.sizes);
     this.os = new OS(this.audio, this.sizes);
@@ -180,7 +177,7 @@ export class Experience {
     // machine and lands sat at it, the glass filling the view with the case
     // around it, and the OS boots as it settles. The visitor is here to use
     // the computer, and this puts them at it without a click — on a phone as
-    // much as on a laptop, since the phone now has a surface sized for it.
+    // much as on a laptop.
     this.setView('screen');
 
     track('experience_started', { quality: this.sizes.quality, phone: this.sizes.phone });
@@ -289,18 +286,42 @@ export class Experience {
 
     this.audio.whoosh();
     this.camera.setMode('focused', () => {
-      // On the glass, on every device. A phone used to lift the OS into a
-      // flat fullscreen panel, which made it readable and made the machine
-      // disappear. It now has a surface sized for its glass instead, and
-      // pinching brings the camera as close as reading needs.
+      // On the glass, on every device, and the same desktop on every device.
+      // A phone used to lift the OS into a flat fullscreen panel, which made
+      // the machine disappear. Now it sees what a laptop sees, and pinches or
+      // double-taps to get close enough to read.
       this.detachOverlay();
 
       this.os.setInteractive(true);
       this.os.powerOn();
       this.audio.setHumLevel(1);
+      this.hintZoom();
     });
 
     track('monitor_focused');
+  }
+
+  /**
+   * Nothing on screen says the glass can be zoomed, and on a phone the
+   * desktop is small enough at rest that it needs to be. Said once, after the
+   * welcome toast, and never again for that visitor.
+   */
+  private hintZoom() {
+    const key = 'shrey-pc:zoom-hint';
+    try {
+      if (localStorage.getItem(key)) return;
+      localStorage.setItem(key, '1');
+    } catch {
+      // No storage: the hint may repeat, which is better than never showing.
+    }
+    const touch = window.matchMedia('(pointer: coarse)').matches;
+    window.setTimeout(() => {
+      notify(
+        'Get closer',
+        touch ? 'Double-tap or pinch the screen to zoom in.' : 'Pinch the trackpad or ⌃-scroll to zoom in.',
+        5200,
+      );
+    }, 2400);
   }
 
   /** Lift the OS off the glass and into a screen-space panel. */

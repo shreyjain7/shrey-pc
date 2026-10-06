@@ -35,19 +35,27 @@ export const STUDIO_FAR = 0xcfcfd4;
 
 export class Room {
   readonly group = new Group();
+  /** Tinted by the time of day; see Daylight. */
+  readonly dome: MeshBasicMaterial;
 
   constructor(quality: Quality) {
     /* --- Backdrop ---------------------------------------------------------- */
 
+    this.dome = new MeshBasicMaterial({
+      map: backdropTexture(),
+      side: BackSide,
+      // Unlit and unfogged: this *is* the far distance, not a thing in it.
+      fog: false,
+      // Nor tone-mapped. three.js applies fog after tone mapping, so the
+      // floor's far rim comes out at exactly the fog colour; the dome has to
+      // as well or the two part at the horizon. ACES all but blacks out the
+      // night grey, which drew a hard line across the room after dark.
+      toneMapped: false,
+      depthWrite: false,
+    });
     const dome = new Mesh(
       new SphereGeometry(30, quality === 'low' ? 16 : 32, quality === 'low' ? 10 : 20),
-      new MeshBasicMaterial({
-        map: backdropTexture(),
-        side: BackSide,
-        // Unlit and unfogged: this *is* the far distance, not a thing in it.
-        fog: false,
-        depthWrite: false,
-      }),
+      this.dome,
     );
     this.group.add(dome);
 

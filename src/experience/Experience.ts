@@ -100,6 +100,7 @@ export class Experience {
       setView: (view) => this.setView(view),
       resetView: () => this.camera.resetView(),
       toggleFullscreen: () => this.toggleFullscreen(),
+      setTimeOfDay: (hour) => this.world.daylight?.preview(hour),
     });
 
     // iOS Safari still zooms the *page* on a two-finger pinch whatever the

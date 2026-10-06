@@ -11,6 +11,7 @@ import { RectAreaLightUniformsLib } from 'three/examples/jsm/lights/RectAreaLigh
 import type { Camera } from '../experience/Camera';
 import type { Sizes } from '../experience/Sizes';
 import { Chair } from './Chair';
+import { Daylight } from './Daylight';
 import { Desk } from './Desk';
 import { Monitor } from './Monitor';
 import { Peripherals } from './Peripherals';
@@ -36,6 +37,8 @@ export class World {
 
   private room!: Room;
   private peripherals!: Peripherals;
+  /** The rig, lit for the visitor's time of day. Exists once the lights do. */
+  daylight: Daylight | null = null;
 
   private readonly raycaster = new Raycaster();
   private readonly pointer = new Vector2();
@@ -113,8 +116,10 @@ export class World {
           // enough ambient that nothing in the scene is ever actually dark.
           // Restraint matters here — the reference's charm is that it is
           // evenly lit and shadowless except where things touch the ground.
-          this.scene.add(new AmbientLight(0xffffff, 1.55));
-          this.scene.add(new HemisphereLight(0xffffff, 0xc4c4ca, 1.2));
+          // These are the daytime values; Daylight moves them with the clock.
+          const ambient = new AmbientLight(0xffffff, 1.55);
+          const hemi = new HemisphereLight(0xffffff, 0xc4c4ca, 1.2);
+          this.scene.add(ambient, hemi);
 
           const key = new DirectionalLight(0xfff6ea, 2.1);
           key.position.set(2.1, 3.4, 2.5);
@@ -139,6 +144,16 @@ export class World {
           const rim = new DirectionalLight(0xffffff, 0.4);
           rim.position.set(-1.2, 1.7, -2.6);
           this.scene.add(rim);
+
+          this.daylight = new Daylight({
+            ambient,
+            hemi,
+            key,
+            fill,
+            rim,
+            fog: this.scene.fog as FogExp2,
+            dome: this.room.dome,
+          });
         },
       },
     ];
@@ -159,7 +174,9 @@ export class World {
 
   /** Screen spill tracks how bright the OS actually is right now. */
   setGlow(intensity: number) {
-    this.monitor?.setGlow(intensity);
+    // At night the screen is the brightest thing in the room, so it lights
+    // more of it.
+    this.monitor?.setGlow(intensity * (this.daylight?.screenBoost ?? 1));
   }
 
   private setPointer(event: PointerEvent) {
@@ -216,6 +233,7 @@ export class World {
   };
 
   destroy() {
+    this.daylight?.destroy();
     window.removeEventListener('pointerdown', this.onPointerDown);
     window.removeEventListener('pointerup', this.onPointerUp);
     window.removeEventListener('pointermove', this.onPointerMove);

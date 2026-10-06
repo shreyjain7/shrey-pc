@@ -712,3 +712,27 @@ textarea,
   user-select: text;
   -webkit-touch-callout: default;
 }
+
+/* --- After dark ----------------------------------------------------------
+   Daylight sets this once the studio has gone dark, so the page's own ink
+   and pills turn over with it instead of sitting as a bright frame around a
+   dark room. */
+
+body.is-dark-room {
+  --ui-text: #e6e8ef;
+  --ui-dim: #9ea3b4;
+  --ui-accent: #d3d7e4;
+  color-scheme: dark;
+}
+
+body.is-dark-room .hint,
+body.is-dark-room .ctrl,
+body.is-dark-room .exit,
+body.is-dark-room .telemetry {
+  border-color: rgba(200, 210, 240, 0.16);
+  background: rgba(22, 24, 32, 0.72);
+}
+
+body.is-dark-room .telemetry__bar {
+  background: rgba(220, 225, 240, 0.14);
+}

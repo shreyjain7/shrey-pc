@@ -27,6 +27,8 @@ interface SceneHandlers {
   resetView: () => void;
   /** Toggle browser fullscreen. */
   toggleFullscreen: () => void;
+  /** Light the room for an hour (0-24), or the visitor's own with null. */
+  setTimeOfDay: (hour: number | null) => void;
 }
 
 let handlers: Handlers | null = null;
@@ -94,6 +96,10 @@ export function resetCameraView() {
 
 export function toggleFullscreen() {
   scene?.toggleFullscreen();
+}
+
+export function setTimeOfDay(hour: number | null) {
+  scene?.setTimeOfDay(hour);
 }
 
 export function hasCaseCam() {

@@ -9,7 +9,8 @@ import {
 } from '../data/timetable';
 import { describeNextClass } from './apps/Timetable';
 import { basename, dirname, fs, HOME, join, normalise, type FsNode } from './fs';
-import { barrelRoll, openApp, openPath, party, startScreensaver } from './system';
+import { PHASE_HOURS, PHASES, type Phase } from '../world/Daylight';
+import { barrelRoll, openApp, openPath, party, setTimeOfDay, startScreensaver } from './system';
 import { el } from './ui';
 
 let onKeystroke: () => void = () => {};
@@ -497,6 +498,30 @@ const commands: Record<string, Command> = {
     run: ({ print }) => {
       print('Wake up, ' + profile.name.split(' ')[0] + '...', 'out--accent');
       window.setTimeout(() => startScreensaver('matrix'), 600);
+    },
+  },
+
+  lights: {
+    usage: 'lights [auto|' + PHASES.join('|') + '|0-23]',
+    summary: "light the room for another time of day, or 'auto'",
+    run: ({ args, print }) => {
+      const arg = args[0]?.toLowerCase();
+      if (!arg) {
+        print('The room follows your clock. Try: lights night, lights golden, lights 7, lights auto', 'out--dim');
+        return;
+      }
+      if (arg === 'auto') {
+        setTimeOfDay(null);
+        print('Back on your own clock.');
+        return;
+      }
+      const hour = (PHASES as string[]).includes(arg) ? PHASE_HOURS[arg as Phase] : Number(arg);
+      if (!Number.isFinite(hour) || hour < 0 || hour >= 24) {
+        print('lights: expected auto, ' + PHASES.join(', ') + ', or an hour from 0 to 23', 'out--warn');
+        return;
+      }
+      setTimeOfDay(hour);
+      print('Fast-forwarding to ' + String(Math.floor(hour)).padStart(2, '0') + ':' + (hour % 1 ? '30' : '00') + '...');
     },
   },
 

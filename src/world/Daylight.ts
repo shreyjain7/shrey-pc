@@ -162,6 +162,8 @@ export class Daylight {
   hour = localHour();
   /** Multiplier for the screen's spill light at this hour. */
   screenBoost = 1;
+  /** 0 in full daylight, 1 at night: what the desk lamp switches on by. */
+  darkness = 0;
 
   private override: number | null = null;
   /** The density the world set for this quality tier; looks scale it. */
@@ -169,6 +171,11 @@ export class Daylight {
   private timer = 0;
   private sweep = 0;
   private readonly scratch = { far: new Color(), near: new Color(), sky: new Color(), key: new Color() };
+  /** What the weather is doing to the light; see `setSky`. */
+  private sky = { cloud: 0, haze: 0 };
+  /** Extra ambient while a lightning flash is up. */
+  private flashBoost = 0;
+  private readonly listeners = new Set<() => void>();
 
   constructor(private readonly rig: Rig) {
     this.baseFog = rig.fog.density;
@@ -202,6 +209,33 @@ export class Daylight {
     });
   }
 
+  /**
+   * The weather's say in the light. `cloud` takes the sun out of the key and
+   * greys the backdrop; `haze` thickens the fog. Both 0..1.
+   */
+  setSky(cloud: number, haze: number) {
+    this.sky = { cloud: MathUtils.clamp(cloud, 0, 1), haze: MathUtils.clamp(haze, 0, 1) };
+    this.apply(this.hour);
+  }
+
+  /** Lightning: two hard white pulses, the second a beat after the first. */
+  flash() {
+    const pulse = (level: number, at: number) =>
+      window.setTimeout(() => {
+        this.flashBoost = level;
+        this.apply(this.hour);
+      }, at);
+    pulse(3.2, 0);
+    pulse(0, 70);
+    pulse(2.2, 150);
+    pulse(0, 260);
+  }
+
+  /** Told after every change to the light, which the lamp listens for. */
+  onChange(listener: () => void) {
+    this.listeners.add(listener);
+  }
+
   /** The phase this hour is closest to, for describing it. */
   get phase(): Phase {
     let best: Phase = 'day';
@@ -232,16 +266,29 @@ export class Daylight {
 
     far.set(a.far).lerp(new Color(b.far), t);
     near.set(a.near).lerp(new Color(b.near), t);
+
+    // Cloud cover: the backdrop goes greyer and a little darker, the way an
+    // overcast sky flattens a room.
+    const cloud = this.sky.cloud;
+    if (cloud > 0) {
+      const grey = (c: Color) => {
+        const l = (c.r + c.g + c.b) / 3;
+        c.lerp(new Color(l, l, l * 1.04), cloud * 0.5).multiplyScalar(1 - cloud * 0.16);
+      };
+      grey(far);
+      grey(near);
+    }
     sky.set(a.hemiSky).lerp(new Color(b.hemiSky), t);
     key.set(a.keyColor).lerp(new Color(b.keyColor), t);
 
     const rig = this.rig;
-    rig.ambient.intensity = mix(a.ambient, b.ambient);
+    rig.ambient.intensity = mix(a.ambient, b.ambient) * (1 - cloud * 0.12) + this.flashBoost;
     rig.hemi.intensity = mix(a.hemi, b.hemi);
     rig.hemi.color.copy(sky);
-    rig.key.intensity = mix(a.key, b.key);
+    // Clouds take the sun out first: the key loses most, the fill some.
+    rig.key.intensity = mix(a.key, b.key) * (1 - cloud * 0.55);
     rig.key.color.copy(key);
-    rig.fill.intensity = mix(a.fill, b.fill);
+    rig.fill.intensity = mix(a.fill, b.fill) * (1 - cloud * 0.3);
     rig.rim.intensity = mix(a.rim, b.rim);
     this.screenBoost = mix(a.screen, b.screen);
 
@@ -249,10 +296,11 @@ export class Daylight {
     // The dome is a texture, so it is tinted by the ratio that turns its own
     // horizon stop into `far`.
     rig.fog.color.copy(far);
-    rig.fog.density = this.baseFog * mix(a.fog, b.fog);
+    rig.fog.density = this.baseFog * mix(a.fog, b.fog) * (1 + this.sky.haze * 1.3);
     rig.dome.color.setRGB(far.r / DOME_HORIZON.r, far.g / DOME_HORIZON.g, far.b / DOME_HORIZON.b);
 
     this.paintPage(far, near);
+    for (const listener of this.listeners) listener();
   }
 
   /** The CSS behind the canvas, its type, and the browser's own chrome. */
@@ -269,6 +317,8 @@ export class Daylight {
     const hsl = { h: 0, s: 0, l: 0 };
     far.getHSL(hsl);
     document.body.classList.toggle('is-dark-room', hsl.l < 0.32);
+    // Day's grey sits at about 0.82, golden hour 0.77, dusk 0.39, night 0.12.
+    this.darkness = MathUtils.clamp((0.62 - hsl.l) / 0.4, 0, 1);
 
     document.querySelector('meta[name="theme-color"]')?.setAttribute('content', farCss);
   }

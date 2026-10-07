@@ -12,6 +12,7 @@ import type { Camera } from '../experience/Camera';
 import type { Sizes } from '../experience/Sizes';
 import { Chair } from './Chair';
 import { Daylight } from './Daylight';
+import { DeskLamp } from './DeskLamp';
 import { Desk } from './Desk';
 import { Monitor } from './Monitor';
 import { Peripherals } from './Peripherals';
@@ -19,6 +20,7 @@ import { Plant } from './Plant';
 import { Room, STUDIO_FAR } from './Room';
 import { SystemUnit } from './SystemUnit';
 import { telemetry } from './telemetry';
+import { Weather } from './Weather';
 
 export interface BuildStep {
   name: string;
@@ -39,6 +41,11 @@ export class World {
   private peripherals!: Peripherals;
   /** The rig, lit for the visitor's time of day. Exists once the lights do. */
   daylight: Daylight | null = null;
+  /** The real weather, and the lamp that comes on when it gets dark. */
+  weather: Weather | null = null;
+  lamp: DeskLamp | null = null;
+  /** Told when the lamp is clicked, for the switch's click. */
+  onLampToggle: (on: boolean) => void = () => {};
 
   private readonly raycaster = new Raycaster();
   private readonly pointer = new Vector2();
@@ -156,11 +163,27 @@ export class World {
           });
         },
       },
+      {
+        name: 'lamp.weather',
+        run: () => {
+          const daylight = this.daylight!;
+
+          this.lamp = new DeskLamp(quality);
+          this.scene.add(this.lamp.group);
+          const lamp = this.lamp;
+          daylight.onChange(() => lamp.follow(daylight.darkness));
+          lamp.follow(daylight.darkness);
+
+          this.weather = new Weather(quality, daylight);
+          this.scene.add(this.weather.group);
+        },
+      },
     ];
   }
 
   update(delta: number, elapsed: number) {
     this.room?.update(elapsed);
+    this.weather?.update(elapsed);
     this.peripherals?.update(delta);
     // The drive lamp blinks with whatever the OS is actually doing.
     this.unit?.setActivity(telemetry.state.keys);
@@ -202,23 +225,38 @@ export class World {
     this.pointerDownAt = { x: event.clientX, y: event.clientY };
   };
 
+  /** Whether the pointer is over the desk lamp. */
+  private hitsLamp(event: PointerEvent) {
+    if (!this.lamp) return false;
+    this.setPointer(event);
+    this.raycaster.setFromCamera(this.pointer, this.camera.instance);
+    return this.raycaster.intersectObjects(this.lamp.hitboxes, false).length > 0;
+  }
+
   private onPointerUp = (event: PointerEvent) => {
     const down = this.pointerDownAt;
     this.pointerDownAt = null;
-    if (!down || this.camera.mode !== 'idle') return;
+    // At the glass the canvas takes no input; the room poses both do.
+    if (!down || this.camera.mode === 'focused') return;
 
-    // Ignore drags — the camera orbits on drag, so only a clean tap flies in.
+    // Ignore drags — the camera orbits on drag, so only a clean tap counts.
     const travelled = Math.hypot(event.clientX - down.x, event.clientY - down.y);
     if (travelled > 10) return;
 
-    if (this.hitsMachine(event)) this.onMonitorClick();
+    // The lamp first: it stands nearer the camera than the machine behind it.
+    if (this.lamp && this.hitsLamp(event)) {
+      this.onLampToggle(this.lamp.toggle());
+      return;
+    }
+
+    if (this.camera.mode === 'idle' && this.hitsMachine(event)) this.onMonitorClick();
   };
 
   private onPointerMove = (event: PointerEvent) => {
     // Hover styling is meaningless on touch and costs a raycast per move.
     if (this.sizes.touch) return;
 
-    if (this.camera.mode !== 'idle') {
+    if (this.camera.mode === 'focused') {
       if (this.hovering) {
         this.hovering = false;
         document.body.classList.remove('is-hovering-monitor');
@@ -226,7 +264,7 @@ export class World {
       return;
     }
 
-    const hit = this.hitsMachine(event);
+    const hit = this.hitsLamp(event) || (this.camera.mode === 'idle' && this.hitsMachine(event));
     if (hit === this.hovering) return;
     this.hovering = hit;
     document.body.classList.toggle('is-hovering-monitor', hit);
@@ -234,6 +272,8 @@ export class World {
 
   destroy() {
     this.daylight?.destroy();
+    this.weather?.destroy();
+    this.lamp?.destroy();
     window.removeEventListener('pointerdown', this.onPointerDown);
     window.removeEventListener('pointerup', this.onPointerUp);
     window.removeEventListener('pointermove', this.onPointerMove);

@@ -29,6 +29,9 @@ interface SceneHandlers {
   toggleFullscreen: () => void;
   /** Light the room for an hour (0-24), or the visitor's own with null. */
   setTimeOfDay: (hour: number | null) => void;
+  /** The terminal's weather and lamp commands; each says what it did. */
+  weather: (arg: string) => Promise<string>;
+  lamp: (arg: string) => string;
 }
 
 let handlers: Handlers | null = null;
@@ -100,6 +103,14 @@ export function toggleFullscreen() {
 
 export function setTimeOfDay(hour: number | null) {
   scene?.setTimeOfDay(hour);
+}
+
+export function weatherCommand(arg: string) {
+  return scene?.weather(arg) ?? Promise.resolve('weather: unavailable');
+}
+
+export function lampCommand(arg: string) {
+  return scene?.lamp(arg) ?? 'lamp: unavailable';
 }
 
 export function hasCaseCam() {

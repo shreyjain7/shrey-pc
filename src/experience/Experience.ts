@@ -7,6 +7,8 @@ import { OS } from '../os/OS';
 import { registerScene, type RoomView } from '../os/system';
 import { SCREEN_CENTER } from '../world/layout';
 import { telemetry } from '../world/telemetry';
+import type { Conditions, Sky } from '../world/Weather';
+import { SKIES } from '../world/Weather';
 import { World } from '../world/World';
 import { Audio } from './Audio';
 import { Camera } from './Camera';
@@ -32,6 +34,8 @@ export class Experience {
   private readonly ui: HTMLElement;
   private loader!: HTMLElement;
   private loaderFill!: HTMLElement;
+  /** The line under the name that says what the sky is doing. */
+  private weatherLine!: HTMLElement;
   private soundButton!: HTMLButtonElement;
 
   private overlay!: HTMLElement;
@@ -101,6 +105,8 @@ export class Experience {
       resetView: () => this.camera.resetView(),
       toggleFullscreen: () => this.toggleFullscreen(),
       setTimeOfDay: (hour) => this.world.daylight?.preview(hour),
+      weather: (arg) => this.commandWeather(arg),
+      lamp: (arg) => this.commandLamp(arg),
     });
 
     // iOS Safari still zooms the *page* on a two-finger pinch whatever the
@@ -173,6 +179,7 @@ export class Experience {
     // across the studio. Cut short, not cut out, for anyone who asked for
     // less motion — a snap to a pose reads worse than a quick glide.
     this.camera.arrive(reducedMotion ? 1.2 : undefined);
+    this.bindWeather();
 
     // The flight does not stop across the room: it carries on down to the
     // machine and lands sat at it, the glass filling the view with the case
@@ -202,6 +209,68 @@ export class Experience {
     };
 
     for (const type of events) window.addEventListener(type, unlock, { once: false });
+  }
+
+  /* ---------------------------------------------------------------------- */
+  /* Weather and the lamp                                                    */
+  /* ---------------------------------------------------------------------- */
+
+  private bindWeather() {
+    this.world.onLampToggle = () => this.audio.click();
+
+    const weather = this.world.weather;
+    if (!weather) return;
+    weather.onStrike = () => this.audio.thunder();
+    weather.onChange((conditions) => {
+      const wet = conditions.sky === 'rain' || conditions.sky === 'storm';
+      this.audio.setRain(wet ? 0.4 + conditions.amount * 0.6 : 0);
+      this.weatherLine.textContent = describeWeather(conditions);
+      this.weatherLine.hidden = !this.weatherLine.textContent;
+    });
+  }
+
+  /** The terminal's `weather`. Says what it did, for the terminal to print. */
+  private async commandWeather(arg: string): Promise<string> {
+    const weather = this.world.weather;
+    if (!weather) return 'weather: the room is still being built';
+
+    if (!arg) {
+      return describeWeather(weather.conditions) || 'No reading yet; the room is showing a clear sky.';
+    }
+    if (arg === 'auto') {
+      weather.auto();
+      return 'Back to the live forecast.';
+    }
+    if (arg === 'here') {
+      const ok = await weather.here();
+      return ok
+        ? 'Showing the weather where you are: ' + describeWeather(weather.conditions)
+        : 'weather: no location — permission was refused or timed out.';
+    }
+    if ((SKIES as string[]).includes(arg)) {
+      weather.preview(arg as Sky);
+      return 'Previewing ' + arg + ". 'weather auto' brings back the real sky.";
+    }
+    return 'weather: expected auto, here, or one of ' + SKIES.join(', ');
+  }
+
+  /** The terminal's `lamp`. */
+  private commandLamp(arg: string): string {
+    const lamp = this.world.lamp;
+    if (!lamp) return 'lamp: the room is still being built';
+    if (arg === 'on' || arg === 'off') {
+      lamp.auto = false;
+      lamp.set(arg === 'on');
+      this.audio.click();
+      return 'Lamp ' + arg + '.';
+    }
+    if (arg === 'auto') {
+      lamp.auto = true;
+      lamp.follow(this.world.daylight?.darkness ?? 0);
+      return 'The lamp will follow the light again.';
+    }
+    if (!arg) return 'The lamp is ' + (lamp.on ? 'on' : 'off') + (lamp.auto ? ', following the light.' : ', set by hand.');
+    return 'lamp: expected on, off or auto';
   }
 
   /* ---------------------------------------------------------------------- */
@@ -524,7 +593,9 @@ export class Experience {
     const brandLocation = document.createElement('p');
     brandLocation.className = 'brand__location';
     brandLocation.textContent = profile.location;
-    brand.append(brandName, brandRole, brandLocation);
+    this.weatherLine = document.createElement('p');
+    this.weatherLine.className = 'brand__weather';
+    brand.append(brandName, brandRole, brandLocation, this.weatherLine);
 
     const hint = document.createElement('div');
     hint.className = 'ui-panel ui-panel--idle hint';
@@ -736,6 +807,15 @@ export class Experience {
     this.audio.destroy();
     this.renderer.destroy();
   }
+}
+
+/** "Light rain · 24°C in Hyderabad", or a preview's plain label. */
+function describeWeather(conditions: Conditions) {
+  if (!conditions.place) return conditions.sky === 'clear' ? '' : conditions.label + ' (preview)';
+  const temperature =
+    conditions.temperature === null ? '' : ' · ' + Math.round(conditions.temperature) + '°C';
+  const where = conditions.place === 'where you are' ? ' where you are' : ' in ' + conditions.place;
+  return conditions.label + temperature + where;
 }
 
 /* -------------------------------------------------------------------------- */

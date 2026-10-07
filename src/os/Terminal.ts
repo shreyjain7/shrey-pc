@@ -10,7 +10,16 @@ import {
 import { describeNextClass } from './apps/Timetable';
 import { basename, dirname, fs, HOME, join, normalise, type FsNode } from './fs';
 import { PHASE_HOURS, PHASES, type Phase } from '../world/Daylight';
-import { barrelRoll, openApp, openPath, party, setTimeOfDay, startScreensaver } from './system';
+import {
+  barrelRoll,
+  lampCommand,
+  openApp,
+  openPath,
+  party,
+  setTimeOfDay,
+  startScreensaver,
+  weatherCommand,
+} from './system';
 import { el } from './ui';
 
 let onKeystroke: () => void = () => {};
@@ -523,6 +532,20 @@ const commands: Record<string, Command> = {
       setTimeOfDay(hour);
       print('Fast-forwarding to ' + String(Math.floor(hour)).padStart(2, '0') + ':' + (hour % 1 ? '30' : '00') + '...');
     },
+  },
+
+  weather: {
+    usage: 'weather [auto|here|clear|cloudy|fog|rain|snow|storm]',
+    summary: 'the real weather in the room, or a preview of another',
+    run: ({ args, print }) => {
+      void weatherCommand(args[0]?.toLowerCase() ?? '').then((line) => print(line));
+    },
+  },
+
+  lamp: {
+    usage: 'lamp [on|off|auto]',
+    summary: 'the desk lamp; it also comes on by itself after dark',
+    run: ({ args, print }) => print(lampCommand(args[0]?.toLowerCase() ?? '')),
   },
 
   barrelroll: {

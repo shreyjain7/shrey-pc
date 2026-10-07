@@ -17,6 +17,9 @@ export class Audio {
   private humGain: GainNode | null = null;
   private noiseBuffer: AudioBuffer | null = null;
   private started = false;
+  /** How hard it is raining, 0..1; kept until the context can play it. */
+  private rainLevel = 0;
+  private rainGain: GainNode | null = null;
 
   private onChange: (muted: boolean) => void = () => {};
 
@@ -194,6 +197,67 @@ export class Audio {
     whine.start();
 
     this.humGain.gain.setTargetAtTime(1, ctx.currentTime, 1.2);
+    // Weather may have arrived before the visitor's first touch let sound in.
+    this.setRain(this.rainLevel);
+  }
+
+  /**
+   * Rain on a roof: the shared noise buffer looped through a band that keeps
+   * the hiss and the patter and drops the rest. Built once, then only ever
+   * faded, so a passing shower never clicks in or out.
+   */
+  setRain(level: number) {
+    this.rainLevel = level;
+    if (!this.ready || !this.noiseBuffer) return;
+    const ctx = this.context!;
+
+    if (!this.rainGain) {
+      if (level <= 0) return;
+      const source = ctx.createBufferSource();
+      source.buffer = this.noiseBuffer;
+      source.loop = true;
+
+      const low = ctx.createBiquadFilter();
+      low.type = 'lowpass';
+      low.frequency.value = 2600;
+      const high = ctx.createBiquadFilter();
+      high.type = 'highpass';
+      high.frequency.value = 380;
+
+      this.rainGain = ctx.createGain();
+      this.rainGain.gain.value = 0;
+      source.connect(low).connect(high).connect(this.rainGain).connect(this.master!);
+      source.start();
+    }
+
+    this.rainGain.gain.setTargetAtTime(level * 0.07, ctx.currentTime, 1.5);
+  }
+
+  /** Thunder: a slow-building low rumble, a beat after the flash. */
+  thunder() {
+    if (!this.ready || !this.noiseBuffer) return;
+    const ctx = this.context!;
+    const delay = 0.5 + Math.random() * 1.2;
+    const start = ctx.currentTime + delay;
+    const length = 2.4;
+
+    const source = ctx.createBufferSource();
+    source.buffer = this.noiseBuffer;
+    source.loop = true;
+    source.playbackRate.value = 0.5;
+
+    const filter = ctx.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.value = 140;
+
+    const envelope = ctx.createGain();
+    envelope.gain.setValueAtTime(0.0001, start);
+    envelope.gain.exponentialRampToValueAtTime(0.55, start + 0.18);
+    envelope.gain.exponentialRampToValueAtTime(0.0001, start + length);
+
+    source.connect(filter).connect(envelope).connect(this.master!);
+    source.start(start);
+    source.stop(start + length + 0.05);
   }
 
   setHumLevel(level: number) {
